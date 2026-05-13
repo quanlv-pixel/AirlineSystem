@@ -30,9 +30,9 @@ class GradientBackground(QWidget):
             self.height()
         )
 
-        gradient.setColorAt(0, QColor("#FF5252"))
-        gradient.setColorAt(0.5, QColor("#E53935"))
-        gradient.setColorAt(1, QColor("#B71C1C"))
+        gradient.setColorAt(0, QColor("#FF1632"))
+        gradient.setColorAt(0.5, QColor("#FF2942"))
+        gradient.setColorAt(1, QColor("#FF4B5F"))
 
         painter.fillRect(
             self.rect(),
@@ -48,19 +48,29 @@ class InputField(QLineEdit):
 
         self.setPlaceholderText(placeholder)
 
-        self.setFixedHeight(45)
+        self.setFixedHeight(58)
 
         self.setStyleSheet(f"""
             QLineEdit {{
-                background: {GRAY_BG};
-                border: 1px solid {GRAY_BORDER};
-                border-radius: 10px;
-                padding-left: 12px;
+                background: #F3F4F7;
+                border: 1px solid #ECECF1;
+                border-radius: 18px;
+
+                padding-left: 20px;
+
                 font-size: 14px;
+                font-weight: 500;
+
+                color: {TEXT_DARK};
             }}
 
             QLineEdit:focus {{
                 border: 1.5px solid {RED_PRIMARY};
+                background: white;
+            }}
+
+            QLineEdit::placeholder {{
+                color: #9AA3B2;
             }}
         """)
 
@@ -98,7 +108,9 @@ class LoginDialog(QDialog):
         card.setStyleSheet(f"""
             QWidget {{
                 background: white;
-                border-radius: 20px;
+                font-size: 32px;
+                font-weight: 900;
+                letter-spacing: 1px;
             }}
         """)
 
@@ -106,7 +118,7 @@ class LoginDialog(QDialog):
 
         card_layout.setContentsMargins(40, 40, 40, 40)
 
-        card_layout.setSpacing(16)
+        card_layout.setSpacing(20)
 
         # Logo
         logo = QLabel("✈")
@@ -114,7 +126,7 @@ class LoginDialog(QDialog):
         logo.setAlignment(Qt.AlignCenter)
 
         logo.setStyleSheet(f"""
-            font-size: 48px;
+            font-size: 64px;
             color: {RED_PRIMARY};
         """)
 
@@ -124,10 +136,10 @@ class LoginDialog(QDialog):
         title.setAlignment(Qt.AlignCenter)
 
         title.setStyleSheet(f"""
-            font-size: 26px;
-            font-weight: bold;
+            font-size: 34px;
+            font-weight: 900;
             color: {TEXT_DARK};
-            letter-spacing: 2px;
+            letter-spacing: 1px;
         """)
 
         subtitle = QLabel("AIRLINE MANAGEMENT PLATFORM")
@@ -135,9 +147,10 @@ class LoginDialog(QDialog):
         subtitle.setAlignment(Qt.AlignCenter)
 
         subtitle.setStyleSheet(f"""
-            font-size: 10px;
+            font-size: 11px;
+            font-weight: 700;
             color: {GRAY_TEXT};
-            letter-spacing: 2px;
+            letter-spacing: 4px;
         """)
 
         # Inputs
@@ -176,12 +189,22 @@ class LoginDialog(QDialog):
 
         login_button.setStyleSheet(f"""
             QPushButton {{
-                background: {RED_PRIMARY};
+                background: qlineargradient(
+                    x1:0, y1:0,
+                    x2:1, y2:0,
+                    stop:0 #FF1632,
+                    stop:1 #FF4A5F
+                );
+
                 border: none;
-                border-radius: 10px;
+                border-radius: 22px;
+
                 color: white;
-                font-size: 14px;
-                font-weight: bold;
+
+                font-size: 13px;
+                font-weight: 900;
+
+                letter-spacing: 3px;
             }}
 
             QPushButton:hover {{
@@ -202,16 +225,20 @@ class LoginDialog(QDialog):
 
         register_button.setStyleSheet(f"""
             QPushButton {{
-                background: transparent;
-                border: 1px solid {RED_PRIMARY};
-                border-radius: 10px;
-                color: {RED_PRIMARY};
+                background: white;
+
+                border: 1px solid #ECECEC;
+                border-radius: 18px;
+
+                color: {TEXT_DARK};
+
                 font-size: 13px;
-                font-weight: bold;
+                font-weight: 800;
             }}
 
             QPushButton:hover {{
-                background: #FFEBEE;
+                border: 1px solid {RED_PRIMARY};
+                color: {RED_PRIMARY};
             }}
         """)
 
