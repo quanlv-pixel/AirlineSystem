@@ -1,6 +1,6 @@
 from database.db import get_connection
 
-from models.booking import Booking
+from shared.models.booking import Booking
 
 
 def row_to_booking(row):

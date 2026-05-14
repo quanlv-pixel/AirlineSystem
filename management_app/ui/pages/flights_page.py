@@ -13,7 +13,7 @@ from PySide6.QtWidgets import (
 
 from shared.services.flight_service import (
     get_all_flights,
-    search_flights,
+    get_flight_by_id,
 )
 
 RED = "#FF3B3F"
@@ -455,6 +455,6 @@ class FlightsPage(QWidget):
 
         else:
 
-            flights = search_flights(keyword)
+            flights = get_flight_by_id(keyword)
 
         self.load_flights(flights)

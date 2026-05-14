@@ -1,5 +1,5 @@
 from database.db import get_connection as connect_db
-from models.passenger import Passenger
+from shared.models.passenger import Passenger
 
 
 # ─────────────────────────────────────────────

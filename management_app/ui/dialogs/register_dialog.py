@@ -9,14 +9,14 @@ from PySide6.QtWidgets import (
 
 from PySide6.QtCore import Qt
 
-from services.account_service import create_account
+from shared.services.account_service import create_account
 
-from ui.dialogs.login_dialog import (
+from management_app.ui.dialogs.login_dialog import (
     GradientBackground,
     InputField
 )
 
-from styles.theme import *
+from shared.styles.theme import *
 
 
 class RegisterDialog(QDialog):

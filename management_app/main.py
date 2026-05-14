@@ -2,9 +2,8 @@ import sys
 
 from PySide6.QtWidgets import QApplication
 
-from ui.dialogs.login_dialog import LoginDialog
-
-from ui.main_window import MainWindow
+from management_app.ui.dialogs.login_dialog import LoginDialog
+from management_app.ui.main_window import MainWindow
 
 
 app = QApplication(sys.argv)

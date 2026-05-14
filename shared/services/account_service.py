@@ -2,7 +2,7 @@ import hashlib
 from datetime import datetime
 
 from database.db import get_connection as connect_db
-from models.account import Account
+from shared.models.account import Account
 
 
 # ─────────────────────────────────────────────────────────────────────────────

@@ -1,5 +1,5 @@
 from database.db import get_connection as connect_db
-from models.seat import Seat
+from shared.models.seat import Seat
 
 
 def _row_to_seat(row: tuple) -> Seat:

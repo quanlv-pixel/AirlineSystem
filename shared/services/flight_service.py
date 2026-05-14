@@ -1,5 +1,5 @@
 from database.db import get_connection as connect_db
-from models.flight import Flight
+from shared.models.flight import Flight
 
 
 def _row_to_flight(row: tuple) -> Flight:

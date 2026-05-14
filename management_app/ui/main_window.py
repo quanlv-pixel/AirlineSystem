@@ -20,9 +20,14 @@ from PySide6.QtWidgets import (
     QLineEdit,
 )
 
-from models.account import Account
+from shared.models.account import Account
 
-from ui.pages.dashboard_page import DashboardPage
+from management_app.ui.pages.dashboard_page import DashboardPage
+from management_app.ui.pages.flights_page import FlightsPage
+from management_app.ui.pages.passengers_page import PassengerPage
+from management_app.ui.pages.bookings_page import BookingsPage
+from management_app.ui.pages.statistics_page import StatisticsPage
+from management_app.ui.pages.settings_page import SettingsPage
 
 
 # COLORS
@@ -365,16 +370,16 @@ class TopBar(QWidget):
             }}
         """)
 
+        display_name = account.display_name or "JetJet User"
+
         initials = "".join([
             x[0]
-            for x in account.display_name.split()
+            for x in display_name.split()
         ][:2])
 
-        avatar = AvatarCircle(initials)
+        name = QLabel(display_name)
 
-        name = QLabel(
-            account.display_name
-        )
+        avatar = AvatarCircle(initials)
 
         name.setStyleSheet(f"""
             font-size: 13px;
@@ -382,9 +387,8 @@ class TopBar(QWidget):
             color: {TEXT_DARK};
         """)
 
-        role = QLabel(
-            account.role.upper()
-        )
+        role_text = (account.role or "staff").upper()
+        role = QLabel(role_text)
 
         role.setStyleSheet(f"""
             font-size: 9px;
@@ -411,48 +415,6 @@ class TopBar(QWidget):
         layout.addWidget(avatar)
 
         layout.addLayout(profile_col)
-
-
-class PlaceholderPage(QWidget):
-
-    def __init__(
-        self,
-        icon,
-        title
-    ):
-        super().__init__()
-
-        self.setStyleSheet(f"""
-            background: {BG_MAIN};
-        """)
-
-        layout = QVBoxLayout(self)
-
-        layout.setAlignment(Qt.AlignCenter)
-
-        icon_lbl = QLabel(icon)
-
-        icon_lbl.setStyleSheet("""
-            font-size: 60px;
-        """)
-
-        text_lbl = QLabel(
-            f"{title}\n(Coming Soon)"
-        )
-
-        text_lbl.setAlignment(Qt.AlignCenter)
-
-        text_lbl.setStyleSheet(f"""
-            font-size: 18px;
-            color: {GRAY_TEXT};
-            font-weight: bold;
-        """)
-
-        layout.addWidget(icon_lbl)
-
-        layout.addSpacing(12)
-
-        layout.addWidget(text_lbl)
 
 
 class MainWindow(QMainWindow):
@@ -501,21 +463,27 @@ class MainWindow(QMainWindow):
         self.pages.addWidget(
             DashboardPage()
         )
+
         self.pages.addWidget(
-            PlaceholderPage("✈", "Flights")
+            FlightPage()
         )
+
         self.pages.addWidget(
-            PlaceholderPage("👥", "Passengers")
+            PassengerPage()
         )
+
         self.pages.addWidget(
-            PlaceholderPage("🎫", "Bookings")
+            BookingPage()
         )
+
         self.pages.addWidget(
-            PlaceholderPage("📈", "Statistics")
+            StatisticsPage()
         )
+
         self.pages.addWidget(
-            PlaceholderPage("⚙", "Settings")
+            SettingsPage(account)
         )
+        
         body.addWidget(self.pages)
         root.addLayout(body)
 

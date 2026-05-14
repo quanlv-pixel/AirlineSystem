@@ -12,9 +12,9 @@ from PySide6.QtWidgets import (
     QLineEdit,
 )
 
-from services.account_service import login
+from shared.services.account_service import login
 
-from styles.theme import *
+from shared.styles.theme import *
 
 
 class GradientBackground(QWidget):
