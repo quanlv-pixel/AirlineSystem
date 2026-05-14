@@ -17,7 +17,7 @@ class Account:
         self.email = email
         self.password_hash = password_hash
         self.full_name = full_name
-        self.role = role          # 'admin' | 'staff'
+        self.role = role          
         self.created_at = created_at
         self.last_login = last_login
 
