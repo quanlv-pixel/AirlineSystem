@@ -63,37 +63,17 @@ def init_db():
     # =========================================================
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS flights (
-
             flight_id INTEGER PRIMARY KEY AUTOINCREMENT,
-
-            flight_number TEXT NOT NULL UNIQUE,
-
-            airline_name TEXT,
-
+            flight_code TEXT,
             aircraft TEXT,
-
             departure TEXT,
-
             destination TEXT,
-
             departure_time TEXT,
-
             arrival_time TEXT,
-
-            duration TEXT,
-
-            gate TEXT,
-
-            terminal TEXT,
-
-            status TEXT DEFAULT 'Scheduled',
-
             total_seats INTEGER,
-
             available_seats INTEGER,
-
             ticket_price REAL,
-
+            status TEXT,
             created_at TEXT DEFAULT CURRENT_TIMESTAMP
         )
     """)
@@ -103,23 +83,15 @@ def init_db():
     # =========================================================
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS passengers (
-
             passenger_id INTEGER PRIMARY KEY AUTOINCREMENT,
-
             full_name TEXT NOT NULL,
-
-            gender TEXT,
-
-            date_of_birth TEXT,
-
+            gender TEXT NOT NULL,
+            date_of_birth TEXT NOT NULL,
             nationality TEXT,
-
             phone TEXT,
-
             email TEXT,
-
+            member_rank TEXT DEFAULT 'member',
             passport_number TEXT UNIQUE,
-
             created_at TEXT DEFAULT CURRENT_TIMESTAMP
         )
     """)
@@ -213,26 +185,19 @@ def init_db():
     # =========================================================
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS seats (
-
-            seat_id INTEGER PRIMARY KEY AUTOINCREMENT,
-
-            flight_id INTEGER,
-
-            seat_number TEXT,
-
-            seat_class TEXT DEFAULT 'Economy',
-
-            is_reserved INTEGER DEFAULT 0,
-
+            seat_id      INTEGER PRIMARY KEY AUTOINCREMENT,
+            flight_id    INTEGER NOT NULL,
+            seat_number  TEXT NOT NULL,
+            seat_class   TEXT DEFAULT 'Economy',
+            is_reserved  INTEGER DEFAULT 0,
             passenger_id INTEGER,
+            created_at   TEXT DEFAULT CURRENT_TIMESTAMP,
 
             FOREIGN KEY(flight_id)
-                REFERENCES flights(flight_id)
-                ON DELETE CASCADE,
+                REFERENCES flights(flight_id),
 
             FOREIGN KEY(passenger_id)
                 REFERENCES passengers(passenger_id)
-                ON DELETE SET NULL
         )
     """)
 

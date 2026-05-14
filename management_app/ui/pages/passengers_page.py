@@ -10,6 +10,11 @@ from PySide6.QtWidgets import (
     QScrollArea,
 )
 
+from shared.services.passenger_service import (
+    get_all_passengers,
+    search_passengers,
+)
+
 
 RED = "#FF3B4A"
 RED_LIGHT = "#FFF1F2"
@@ -24,16 +29,7 @@ BORDER = "#ECEEF2"
 
 class MemberRow(QWidget):
 
-    def __init__(
-        self,
-        avatar,
-        name,
-        email,
-        passport_id,
-        country,
-        rank,
-        spending
-    ):
+    def __init__(self, passenger):
         super().__init__()
 
         self.setFixedHeight(78)
@@ -42,7 +38,7 @@ class MemberRow(QWidget):
 
         layout.setContentsMargins(24, 0, 24, 0)
 
-        layout.setSpacing(10)
+        avatar = passenger.full_name[0].upper()
 
         avatar_box = QLabel(avatar)
 
@@ -60,9 +56,7 @@ class MemberRow(QWidget):
 
         name_layout = QVBoxLayout()
 
-        name_layout.setSpacing(2)
-
-        name_lbl = QLabel(name)
+        name_lbl = QLabel(passenger.full_name)
 
         name_lbl.setStyleSheet(f"""
             font-size: 14px;
@@ -70,7 +64,7 @@ class MemberRow(QWidget):
             color: {TEXT_DARK};
         """)
 
-        email_lbl = QLabel(email)
+        email_lbl = QLabel(passenger.email)
 
         email_lbl.setStyleSheet(f"""
             font-size: 11px;
@@ -82,9 +76,7 @@ class MemberRow(QWidget):
 
         passport_layout = QVBoxLayout()
 
-        passport_layout.setSpacing(2)
-
-        pass_lbl = QLabel(passport_id)
+        pass_lbl = QLabel(passenger.passport_number)
 
         pass_lbl.setStyleSheet(f"""
             font-size: 13px;
@@ -92,7 +84,7 @@ class MemberRow(QWidget):
             color: {TEXT_MED};
         """)
 
-        country_lbl = QLabel(country)
+        country_lbl = QLabel(passenger.nationality)
 
         country_lbl.setStyleSheet(f"""
             font-size: 11px;
@@ -102,11 +94,13 @@ class MemberRow(QWidget):
         passport_layout.addWidget(pass_lbl)
         passport_layout.addWidget(country_lbl)
 
+        rank = passenger.member_rank
+
         rank_lbl = QLabel(rank.upper())
 
-        rank_lbl.setFixedHeight(22)
-
         rank_lbl.setAlignment(Qt.AlignCenter)
+
+        rank_lbl.setFixedHeight(24)
 
         if rank.lower() == "bạch kim":
 
@@ -115,33 +109,30 @@ class MemberRow(QWidget):
 
         elif rank.lower() == "vàng":
 
-            bg = "#FFF5F5"
-            color = RED
-
-        elif rank.lower() == "bạc":
-
-            bg = "#FFF5F5"
-            color = RED
+            bg = "#FEF3C7"
+            color = "#92400E"
 
         else:
 
-            bg = "#FFF5F5"
+            bg = RED_LIGHT
             color = RED
 
         rank_lbl.setStyleSheet(f"""
             background: {bg};
             color: {color};
-            border-radius: 11px;
-            padding-left: 10px;
-            padding-right: 10px;
+            border-radius: 12px;
+            padding-left: 12px;
+            padding-right: 12px;
             font-size: 11px;
             font-weight: bold;
         """)
 
+        spending = f"${passenger.total_spending:,.0f}"
+
         spending_lbl = QLabel(spending)
 
         spending_lbl.setStyleSheet(f"""
-            font-size: 16px;
+            font-size: 15px;
             font-weight: bold;
             color: {TEXT_DARK};
         """)
@@ -149,7 +140,7 @@ class MemberRow(QWidget):
         action_lbl = QLabel("⋯")
 
         action_lbl.setStyleSheet(f"""
-            font-size: 20px;
+            font-size: 18px;
             color: {GRAY_TEXT};
         """)
 
@@ -159,85 +150,6 @@ class MemberRow(QWidget):
         layout.addWidget(rank_lbl, 2)
         layout.addWidget(spending_lbl, 2)
         layout.addWidget(action_lbl, 1)
-
-        layout.setAlignment(action_lbl, Qt.AlignCenter)
-
-
-class UpgradeCard(QWidget):
-
-    def __init__(self):
-        super().__init__()
-
-        self.setFixedWidth(230)
-
-        self.setStyleSheet(f"""
-            background: {WHITE};
-            border-radius: 24px;
-            border: 1px solid {BORDER};
-        """)
-
-        layout = QVBoxLayout(self)
-
-        layout.setContentsMargins(30, 30, 30, 30)
-
-        layout.setSpacing(18)
-
-        icon = QLabel("🎖")
-
-        icon.setAlignment(Qt.AlignCenter)
-
-        icon.setStyleSheet("""
-            font-size: 42px;
-        """)
-
-        title = QLabel("Nâng hạng\nThành viên")
-
-        title.setAlignment(Qt.AlignCenter)
-
-        title.setStyleSheet(f"""
-            font-size: 18px;
-            font-weight: bold;
-            color: {TEXT_DARK};
-        """)
-
-        desc = QLabel(
-            "Xử lý nâng hạng hàng loạt cho\nkhách hàng thân thiết."
-        )
-
-        desc.setAlignment(Qt.AlignCenter)
-
-        desc.setStyleSheet(f"""
-            font-size: 12px;
-            color: {GRAY_TEXT};
-            line-height: 18px;
-        """)
-
-        button = QPushButton("CHẠY QUY TRÌNH")
-
-        button.setFixedHeight(44)
-
-        button.setCursor(Qt.PointingHandCursor)
-
-        button.setStyleSheet(f"""
-            QPushButton {{
-                background: #0F172A;
-                border: none;
-                border-radius: 22px;
-                color: white;
-                font-size: 12px;
-                font-weight: bold;
-            }}
-
-            QPushButton:hover {{
-                background: #1E293B;
-            }}
-        """)
-
-        layout.addWidget(icon)
-        layout.addWidget(title)
-        layout.addWidget(desc)
-        layout.addStretch()
-        layout.addWidget(button)
 
 
 class PassengerPage(QWidget):
@@ -259,29 +171,29 @@ class PassengerPage(QWidget):
 
         scroll.setFrameShape(QFrame.NoFrame)
 
-        scroll.setStyleSheet("""
-            border: none;
-            background: transparent;
-        """)
-
         content = QWidget()
 
         scroll.setWidget(content)
 
         outer.addWidget(scroll)
 
-        layout = QVBoxLayout(content)
+        self.layout = QVBoxLayout(content)
 
-        layout.setContentsMargins(32, 28, 32, 24)
+        self.layout.setContentsMargins(32, 28, 32, 24)
 
-        layout.setSpacing(22)
+        self.layout.setSpacing(20)
 
-        # HEADER
+        self.build_header()
+
+        self.build_table()
+
+        self.load_passengers()
+
+    def build_header(self):
+
         header = QHBoxLayout()
 
         title_layout = QVBoxLayout()
-
-        title_layout.setSpacing(2)
 
         title = QLabel("Khách hàng & Thành viên")
 
@@ -292,47 +204,42 @@ class PassengerPage(QWidget):
         """)
 
         subtitle = QLabel(
-            "Hồ sơ hành khách và hạng thành viên thân thiết"
+            "Hồ sơ hành khách và hạng thành viên"
         )
 
         subtitle.setStyleSheet(f"""
-            font-size: 14px;
+            font-size: 13px;
             color: {GRAY_TEXT};
         """)
 
         title_layout.addWidget(title)
         title_layout.addWidget(subtitle)
 
-        search = QLineEdit()
+        self.search = QLineEdit()
 
-        search.setPlaceholderText(
+        self.search.setPlaceholderText(
             "Tìm kiếm hành khách..."
         )
 
-        search.setFixedWidth(280)
+        self.search.setFixedSize(280, 42)
 
-        search.setFixedHeight(40)
+        self.search.textChanged.connect(
+            self.on_search
+        )
 
-        search.setStyleSheet(f"""
+        self.search.setStyleSheet(f"""
             QLineEdit {{
                 background: {WHITE};
                 border: 1px solid {BORDER};
                 border-radius: 20px;
                 padding-left: 16px;
                 font-size: 13px;
-                color: {TEXT_MED};
-            }}
-
-            QLineEdit:focus {{
-                border: 1px solid {RED};
             }}
         """)
 
-        add_btn = QPushButton("+  Đăng Ký Chương trình")
+        add_btn = QPushButton("+  Thêm hành khách")
 
-        add_btn.setFixedHeight(40)
-
-        add_btn.setCursor(Qt.PointingHandCursor)
+        add_btn.setFixedHeight(42)
 
         add_btn.setStyleSheet(f"""
             QPushButton {{
@@ -340,156 +247,85 @@ class PassengerPage(QWidget):
                 border: none;
                 border-radius: 20px;
                 color: white;
-                font-size: 13px;
-                font-weight: bold;
                 padding-left: 20px;
                 padding-right: 20px;
-            }}
-
-            QPushButton:hover {{
-                background: #E53935;
+                font-size: 13px;
+                font-weight: bold;
             }}
         """)
 
         right = QHBoxLayout()
 
-        right.setSpacing(12)
-
-        right.addWidget(search)
+        right.addWidget(self.search)
         right.addWidget(add_btn)
 
         header.addLayout(title_layout)
         header.addStretch()
         header.addLayout(right)
 
-        layout.addLayout(header)
+        self.layout.addLayout(header)
 
-        # CONTENT
-        body = QHBoxLayout()
+    def build_table(self):
 
-        body.setSpacing(20)
+        self.table = QFrame()
 
-        # TABLE CARD
-        table_card = QWidget()
-
-        table_card.setStyleSheet(f"""
+        self.table.setStyleSheet(f"""
             background: {WHITE};
             border-radius: 24px;
             border: 1px solid {BORDER};
         """)
 
-        table_layout = QVBoxLayout(table_card)
+        self.table_layout = QVBoxLayout(self.table)
 
-        table_layout.setContentsMargins(0, 0, 0, 0)
+        self.table_layout.setContentsMargins(0, 0, 0, 0)
 
-        table_layout.setSpacing(0)
+        self.rows_layout = QVBoxLayout()
 
-        top = QHBoxLayout()
+        self.table_layout.addLayout(self.rows_layout)
 
-        top.setContentsMargins(24, 24, 24, 20)
+        self.layout.addWidget(self.table)
 
-        table_title = QLabel("DANH BẠ THÀNH VIÊN")
+    def load_passengers(self):
 
-        table_title.setStyleSheet(f"""
-            font-size: 13px;
-            font-weight: bold;
-            color: {GRAY_TEXT};
-            letter-spacing: 1px;
-        """)
+        passengers = get_all_passengers()
 
-        refresh = QLabel("↻")
+        self.render_rows(passengers)
 
-        refresh.setStyleSheet(f"""
-            font-size: 18px;
-            color: {GRAY_TEXT};
-        """)
+    def render_rows(self, passengers):
 
-        top.addWidget(table_title)
-        top.addStretch()
-        top.addWidget(refresh)
+        while self.rows_layout.count():
 
-        table_layout.addLayout(top)
+            item = self.rows_layout.takeAt(0)
 
-        # TABLE HEADER
-        table_header = QHBoxLayout()
+            widget = item.widget()
 
-        table_header.setContentsMargins(24, 10, 24, 10)
+            if widget:
 
-        headers = [
-            ("HỌ VÀ TÊN", 5),
-            ("GIẤY TỜ", 3),
-            ("HẠNG", 2),
-            ("CHI TIÊU", 2),
-            ("THAO TÁC", 1),
-        ]
+                widget.deleteLater()
 
-        for text, stretch in headers:
+        if not passengers:
 
-            lbl = QLabel(text)
+            empty = QLabel(
+                "Không có hành khách nào."
+            )
 
-            lbl.setStyleSheet(f"""
-                font-size: 12px;
-                font-weight: bold;
+            empty.setAlignment(Qt.AlignCenter)
+
+            empty.setStyleSheet(f"""
+                padding: 40px;
                 color: {GRAY_TEXT};
+                font-size: 14px;
             """)
 
-            table_header.addWidget(lbl, stretch)
+            self.rows_layout.addWidget(empty)
 
-        table_layout.addLayout(table_header)
+            return
 
-        members = [
-            (
-                "L",
-                "Lê Văn Quân",
-                "quanle@jj-air.com",
-                "C1234567",
-                "VIỆT NAM",
-                "Bạch kim",
-                "$2,400"
-            ),
-            (
-                "J",
-                "James Wilson",
-                "james.w@sky.com",
-                "K9821332",
-                "ANH",
-                "Bạc",
-                "$850"
-            ),
-            (
-                "N",
-                "Nguyễn Thu Hà",
-                "ha.nt@jj-air.com",
-                "B8821102",
-                "VIỆT NAM",
-                "Vàng",
-                "$1,200"
-            ),
-            (
-                "Y",
-                "Yoo Si Jin",
-                "yoosj@mail.com",
-                "M3342001",
-                "HÀN QUỐC",
-                "Bạch kim",
-                "$5,100"
-            ),
-            (
-                "E",
-                "Emma Watson",
-                "emma.w@jj-air.com",
-                "U1123382",
-                "MỸ",
-                "Thành viên",
-                "$120"
-            ),
-        ]
+        for passenger in passengers:
 
-        for member in members:
+            row = MemberRow(passenger)
 
-            row = MemberRow(*member)
-
-            table_layout.addWidget(row)
+            self.rows_layout.addWidget(row)
 
             line = QFrame()
 
@@ -499,43 +335,18 @@ class PassengerPage(QWidget):
                 color: {BORDER};
             """)
 
-            table_layout.addWidget(line)
+            self.rows_layout.addWidget(line)
 
-        body.addWidget(table_card, 1)
+    def on_search(self):
 
-        # SIDE CARD
-        side = UpgradeCard()
+        keyword = self.search.text().strip()
 
-        body.addWidget(side)
+        if not keyword:
 
-        layout.addLayout(body)
+            passengers = get_all_passengers()
 
-        # FOOTER
-        footer = QHBoxLayout()
+        else:
 
-        left = QLabel(
-            "© 2026 HỆ THỐNG QUẢN TRỊ JETJET / LƯU HÀNH NỘI BỘ"
-        )
+            passengers = search_passengers(keyword)
 
-        left.setStyleSheet(f"""
-            font-size: 11px;
-            color: {GRAY_TEXT};
-            font-weight: bold;
-            letter-spacing: 2px;
-        """)
-
-        right = QLabel(
-            "●  PHIÊN BẢN 2.5.0 ỔN ĐỊNH"
-        )
-
-        right.setStyleSheet(f"""
-            font-size: 11px;
-            color: {RED};
-            font-weight: bold;
-        """)
-
-        footer.addWidget(left)
-        footer.addStretch()
-        footer.addWidget(right)
-
-        layout.addLayout(footer)
+        self.render_rows(passengers)

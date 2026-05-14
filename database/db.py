@@ -1,8 +1,17 @@
 import sqlite3
+import os
+
+
+DB_PATH = os.path.join(
+    os.path.dirname(__file__),
+    "airline.db"
+)
+
 
 def get_connection():
-    connection = sqlite3.connect("database/airline.db")
 
-    connection.row_factory = sqlite3.Row
+    conn = sqlite3.connect(DB_PATH)
 
-    return connection
+    conn.row_factory = sqlite3.Row
+
+    return conn

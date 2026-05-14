@@ -11,6 +11,11 @@ from PySide6.QtWidgets import (
     QComboBox,
 )
 
+from shared.services.flight_service import (
+    get_all_flights,
+    search_flights,
+)
+
 RED = "#FF3B3F"
 RED_LIGHT = "#FFF1F1"
 WHITE = "#FFFFFF"
@@ -31,14 +36,13 @@ class FlightRow(QWidget):
         arrival,
         percent,
         status,
-        status_color
+        status_color,
     ):
         super().__init__()
 
         self.setFixedHeight(82)
 
         layout = QHBoxLayout(self)
-
         layout.setContentsMargins(24, 0, 24, 0)
 
         # INFO
@@ -58,7 +62,6 @@ class FlightRow(QWidget):
         text_layout = QVBoxLayout()
 
         code_label = QLabel(code)
-
         code_label.setStyleSheet(f"""
             font-size: 15px;
             font-weight: bold;
@@ -66,7 +69,6 @@ class FlightRow(QWidget):
         """)
 
         aircraft_label = QLabel(aircraft.upper())
-
         aircraft_label.setStyleSheet(f"""
             font-size: 11px;
             color: {GRAY_TEXT};
@@ -95,7 +97,7 @@ class FlightRow(QWidget):
         progress_bg = QFrame()
         progress_bg.setFixedSize(95, 5)
 
-        progress_bg.setStyleSheet(f"""
+        progress_bg.setStyleSheet("""
             background: #EEEEEE;
             border-radius: 2px;
         """)
@@ -116,7 +118,7 @@ class FlightRow(QWidget):
 
         percent_label = QLabel(f"{percent}%")
 
-        percent_label.setStyleSheet(f"""
+        percent_label.setStyleSheet("""
             font-size: 12px;
             color: #64748B;
             font-weight: bold;
@@ -143,7 +145,7 @@ class FlightRow(QWidget):
         # ACTION
         action = QLabel("⟳")
 
-        action.setStyleSheet(f"""
+        action.setStyleSheet("""
             font-size: 18px;
             color: #C0C4CC;
         """)
@@ -165,13 +167,11 @@ class FlightsPage(QWidget):
         """)
 
         outer = QVBoxLayout(self)
-
         outer.setContentsMargins(0, 0, 0, 0)
 
         scroll = QScrollArea()
 
         scroll.setWidgetResizable(True)
-
         scroll.setFrameShape(QFrame.NoFrame)
 
         content = QWidget()
@@ -183,7 +183,6 @@ class FlightsPage(QWidget):
         layout = QVBoxLayout(content)
 
         layout.setContentsMargins(28, 24, 28, 28)
-
         layout.setSpacing(20)
 
         # HEADER
@@ -212,6 +211,7 @@ class FlightsPage(QWidget):
         title_layout.addWidget(subtitle)
 
         header.addLayout(title_layout)
+
         header.addStretch()
 
         export_btn = QPushButton("↓  Xuất Danh sách")
@@ -271,15 +271,15 @@ class FlightsPage(QWidget):
 
         search_layout.setContentsMargins(20, 0, 20, 0)
 
-        search = QLineEdit()
+        self.search_input = QLineEdit()
 
-        search.setPlaceholderText(
+        self.search_input.setPlaceholderText(
             "Tìm theo Mã chuyến hoặc Tuyến bay..."
         )
 
-        search.setFixedHeight(42)
+        self.search_input.setFixedHeight(42)
 
-        search.setStyleSheet(f"""
+        self.search_input.setStyleSheet(f"""
             QLineEdit {{
                 background: {GRAY_BG};
                 border: none;
@@ -290,15 +290,19 @@ class FlightsPage(QWidget):
             }}
         """)
 
-        filter_box = QComboBox()
+        self.filter_box = QComboBox()
 
-        filter_box.addItems([
-            "Trạng thái: Tất cả"
+        self.filter_box.addItems([
+            "Tất cả",
+            "Scheduled",
+            "Boarding",
+            "Delayed",
+            "Completed",
         ])
 
-        filter_box.setFixedSize(180, 42)
+        self.filter_box.setFixedSize(180, 42)
 
-        filter_box.setStyleSheet(f"""
+        self.filter_box.setStyleSheet(f"""
             QComboBox {{
                 background: {GRAY_BG};
                 border: none;
@@ -310,9 +314,9 @@ class FlightsPage(QWidget):
             }}
         """)
 
-        search_layout.addWidget(search)
+        search_layout.addWidget(self.search_input)
         search_layout.addSpacing(10)
-        search_layout.addWidget(filter_box)
+        search_layout.addWidget(self.filter_box)
 
         layout.addWidget(search_frame)
 
@@ -328,6 +332,7 @@ class FlightsPage(QWidget):
         table_layout = QVBoxLayout(table)
 
         table_layout.setContentsMargins(0, 0, 0, 0)
+        table_layout.setSpacing(0)
 
         # TABLE HEADER
         header_row = QWidget()
@@ -360,19 +365,75 @@ class FlightsPage(QWidget):
 
         table_layout.addWidget(header_row)
 
-        flights = [
-            ("JJ121", "Airbus A321neo", "SGN", "HAN", 100, "ĐÚNG GIỜ", "#22C55E"),
-            ("JJ342", "Boeing 737 Max", "HAN", "DAD", 85, "CHẬM CHUYẾN", "#EF4444"),
-            ("JJ551", "Airbus A320", "SGN", "PQC", 98, "ĐANG LÊN MÁY BAY", "#2563EB"),
-            ("JJ882", "ATR72", "DAD", "SGN", 0, "ĐÚNG GIỜ", "#22C55E"),
-            ("JJ901", "Boeing 787", "SGN", "ICN", 45, "ĐÃ LÊN LỊCH", "#64748B"),
-        ]
+        self.rows_layout = QVBoxLayout()
+        self.rows_layout.setSpacing(0)
+
+        table_layout.addLayout(self.rows_layout)
+
+        layout.addWidget(table)
+
+        # SIGNALS
+        self.search_input.textChanged.connect(
+            self.handle_search
+        )
+
+        self.filter_box.currentTextChanged.connect(
+            self.handle_search
+        )
+
+        # LOAD DATA
+        self.load_flights()
+
+    def load_flights(self, flights=None):
+
+        if flights is None:
+            flights = get_all_flights()
+
+        while self.rows_layout.count():
+
+            item = self.rows_layout.takeAt(0)
+
+            widget = item.widget()
+
+            if widget:
+                widget.deleteLater()
+
+        selected_status = self.filter_box.currentText()
 
         for flight in flights:
 
-            row = FlightRow(*flight)
+            if (
+                selected_status != "Tất cả"
+                and flight.status != selected_status
+            ):
+                continue
 
-            table_layout.addWidget(row)
+            percent = flight.occupancy_percent
+
+            status = flight.status
+
+            color = "#22C55E"
+
+            if status == "Delayed":
+                color = "#EF4444"
+
+            elif status == "Boarding":
+                color = "#2563EB"
+
+            elif status == "Scheduled":
+                color = "#64748B"
+
+            row = FlightRow(
+                flight.flight_code,
+                flight.aircraft,
+                flight.departure,
+                flight.destination,
+                percent,
+                status.upper(),
+                color
+            )
+
+            self.rows_layout.addWidget(row)
 
             line = QFrame()
 
@@ -382,6 +443,18 @@ class FlightsPage(QWidget):
                 color: {BORDER};
             """)
 
-            table_layout.addWidget(line)
+            self.rows_layout.addWidget(line)
 
-        layout.addWidget(table)
+    def handle_search(self):
+
+        keyword = self.search_input.text().strip()
+
+        if not keyword:
+
+            flights = get_all_flights()
+
+        else:
+
+            flights = search_flights(keyword)
+
+        self.load_flights(flights)

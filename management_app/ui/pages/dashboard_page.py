@@ -19,11 +19,11 @@ except:
     HAS_MPL = False
 
 
-from services.flight_service import get_total_flights
+from shared.services.flight_service import get_total_flights
 
-from services.passenger_service import get_total_passengers
+from shared.services.passenger_service import get_total_passengers
 
-from services.booking_service import (
+from shared.services.booking_service import (
     get_active_bookings_count,
     get_total_revenue
 )
