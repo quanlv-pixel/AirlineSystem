@@ -96,6 +96,13 @@ def _h_sep() -> QFrame:
 def _gen_pnr() -> str:
     return "JJ" + "".join(random.choices(string.ascii_uppercase + string.digits, k=4))
 
+import os
+
+def get_db_path():
+
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    path = os.path.join(current_dir, "..", "database", "airline.db")
+    return os.path.abspath(path)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Logo badge (navbar size)
@@ -602,8 +609,7 @@ class BookingDialog(QDialog):
     def _write_db(self, name, phone, id_, email, seat):
         try:
             import os, sqlite3
-            db = os.path.join(os.path.dirname(__file__), "database", "airline.db")
-            conn = sqlite3.connect(db)
+            conn = sqlite3.connect(get_db_path())
             cur  = conn.cursor()
             cur.execute(
                 "INSERT INTO passengers (full_name,gender,date_of_birth,phone,email,passport_number)"
@@ -725,8 +731,7 @@ class FlightsPage(QWidget):
     def _load_db() -> list[dict] | None:
         try:
             import os, sqlite3
-            db = os.path.join(os.path.dirname(__file__), "database", "airline.db")
-            conn = sqlite3.connect(db)
+            conn = sqlite3.connect(get_db_path())
             cur  = conn.cursor()
             cur.execute("""
                 SELECT flight_id, flight_number, aircraft,
