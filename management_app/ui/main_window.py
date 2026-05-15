@@ -465,7 +465,7 @@ class MainWindow(QMainWindow):
         )
 
         self.pages.addWidget(
-            FlightPage()
+            FlightsPage()
         )
 
         self.pages.addWidget(
@@ -473,7 +473,7 @@ class MainWindow(QMainWindow):
         )
 
         self.pages.addWidget(
-            BookingPage()
+            BookingsPage()
         )
 
         self.pages.addWidget(
@@ -503,7 +503,7 @@ class MainWindow(QMainWindow):
         )
 
     def logout(self):
-        from ui.dialogs.login_dialog import LoginDialog
+        from management_app.ui.dialogs.login_dialog import LoginDialog
         self.login = LoginDialog()
         self.login.show()
         self.close()

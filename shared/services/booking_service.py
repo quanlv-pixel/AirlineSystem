@@ -41,6 +41,23 @@ def get_all_bookings():
         for row in rows
     ]
 
+def get_total_bookings():
+
+    conn = get_connection()
+
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT COUNT(*)
+        FROM bookings
+    """)
+
+    total = cursor.fetchone()[0]
+
+    conn.close()
+
+    return total
+
 
 def get_active_bookings_count():
 

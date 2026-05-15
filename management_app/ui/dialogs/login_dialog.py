@@ -294,7 +294,7 @@ class LoginDialog(QDialog):
 
     def open_register(self):
 
-        from ui.dialogs.register_dialog import RegisterDialog
+        from management_app.ui.dialogs.register_dialog import RegisterDialog
 
         dialog = RegisterDialog()
 

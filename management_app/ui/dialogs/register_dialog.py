@@ -5,10 +5,10 @@ from PySide6.QtWidgets import (
     QPushButton,
     QWidget,
     QMessageBox,
+    QLineEdit,
 )
 
 from PySide6.QtCore import Qt
-
 from shared.services.account_service import create_account
 
 from management_app.ui.dialogs.login_dialog import (
@@ -93,11 +93,11 @@ class RegisterDialog(QDialog):
         )
 
         self.password_input.setEchoMode(
-            self.password_input.Password
+            QLineEdit.Password
         )
 
         self.confirm_input.setEchoMode(
-            self.confirm_input.Password
+            QLineEdit.Password
         )
 
         self.error_label = QLabel("")

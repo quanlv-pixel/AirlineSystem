@@ -201,3 +201,28 @@ def get_total_flights() -> int:
     conn.close()
 
     return total
+
+def get_average_load_factor() -> int:
+    conn = connect_db()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT
+            AVG(
+                (
+                    CAST(total_seats - available_seats AS FLOAT)
+                    / total_seats
+                ) * 100
+            )
+        FROM flights
+        WHERE total_seats > 0
+    """)
+
+    result = cursor.fetchone()[0]
+
+    conn.close()
+
+    if result is None:
+        return 0
+
+    return round(result)

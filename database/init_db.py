@@ -63,17 +63,29 @@ def init_db():
     # =========================================================
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS flights (
+
             flight_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            flight_code TEXT,
+
+            flight_number TEXT NOT NULL,
+            airline_name TEXT NOT NULL,
+
+            departure TEXT NOT NULL,
+            destination TEXT NOT NULL,
+
+            departure_time TEXT NOT NULL,
+            arrival_time TEXT NOT NULL,
+
+            available_seats INTEGER NOT NULL,
+            total_seats INTEGER NOT NULL,
+
+            ticket_price REAL NOT NULL,
+
+            status TEXT DEFAULT 'scheduled',
+
             aircraft TEXT,
-            departure TEXT,
-            destination TEXT,
-            departure_time TEXT,
-            arrival_time TEXT,
-            total_seats INTEGER,
-            available_seats INTEGER,
-            ticket_price REAL,
-            status TEXT,
+            gate TEXT,
+            terminal TEXT,
+
             created_at TEXT DEFAULT CURRENT_TIMESTAMP
         )
     """)
@@ -92,6 +104,7 @@ def init_db():
             email TEXT,
             member_rank TEXT DEFAULT 'member',
             passport_number TEXT UNIQUE,
+            total_spending REAL DEFAULT 0,
             created_at TEXT DEFAULT CURRENT_TIMESTAMP
         )
     """)
@@ -110,15 +123,19 @@ def init_db():
 
             flight_id INTEGER,
 
-            booking_date TEXT DEFAULT CURRENT_TIMESTAMP,
-
             seat_number TEXT,
 
-            travel_class TEXT DEFAULT 'Economy',
+            booking_class TEXT DEFAULT 'Economy',
+
+            total_amount REAL,
+
+            payment_status TEXT DEFAULT 'Pending',
 
             booking_status TEXT DEFAULT 'Pending',
 
-            total_amount REAL,
+            booking_date TEXT DEFAULT CURRENT_TIMESTAMP,
+
+            created_by TEXT,
 
             FOREIGN KEY(passenger_id)
                 REFERENCES passengers(passenger_id)
