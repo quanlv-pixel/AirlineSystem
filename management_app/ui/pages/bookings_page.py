@@ -1,749 +1,798 @@
 """
 ui/pages/booking_page.py
-────────────────────────────────────────
-JetJet Management App — Booking Page
+-------------------------
+Đặt file này vào: ui/pages/booking_page.py
+Trang Quản lý Đặt chỗ — JetJet Management App
 """
-
 from __future__ import annotations
-
 import random
 import string
 from datetime import datetime
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, Signal, QTimer
 from PySide6.QtGui import (
-    QColor,
-    QPainter,
-    QBrush,
-    QPen,
-    QFont,
-    QPainterPath,
+    QColor, QFont, QPainter, QBrush, QPen, QPainterPath
 )
-
 from PySide6.QtWidgets import (
-    QWidget,
-    QVBoxLayout,
-    QHBoxLayout,
-    QLabel,
-    QPushButton,
-    QFrame,
-    QScrollArea,
-    QLineEdit,
-    QComboBox,
-    QApplication,
-    QMainWindow,
-    QMessageBox,
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
+    QFrame, QScrollArea, QSizePolicy, QLineEdit, QComboBox,
+    QApplication, QMainWindow, QMessageBox, QSpacerItem
 )
 
-from shared.services.booking_service import (
-    get_all_bookings,
-)
+# ─────────────────────────────────────────────────────────────────────────────
+# Màu sắc & hằng số
+# ─────────────────────────────────────────────────────────────────────────────
+C_BG      = "#F4F6FA"
+C_WHITE   = "#FFFFFF"
+C_BORDER  = "#E4E6F0"
+C_TEXT    = "#1A1A2E"
+C_MID     = "#4A4A6A"
+C_GRAY    = "#9B9BB4"
+C_LGRAY   = "#F0F1F8"
+C_RED     = "#E53935"
+C_RED_L   = "#FFEBEE"
+C_DARK    = "#1A1A2E"
 
-# ─────────────────────────────────────
-# COLORS
-# ─────────────────────────────────────
-C_BG = "#F4F6FA"
-C_WHITE = "#FFFFFF"
-C_BORDER = "#E4E6F0"
-C_TEXT = "#1A1A2E"
-C_MID = "#4A4A6A"
-C_GRAY = "#9B9BB4"
-C_LGRAY = "#F0F1F8"
-C_RED = "#E53935"
-C_RED_L = "#FFEBEE"
-C_DARK = "#1A1A2E"
-
+# Màu badge thanh toán
 PAY_COLORS = {
-    "PAID": ("#166534", "#DCFCE7"),
-    "PENDING": ("#92400E", "#FEF3C7"),
-    "CANCELLED": ("#991B1B", "#FEE2E2"),
+    "ĐÃ TRẢ":  ("#166534", "#DCFCE7"),   # xanh lá
+    "CHỜ TRẢ": ("#92400E", "#FEF3C7"),   # vàng cam
+    "ĐÃ HUỶ":  ("#991B1B", "#FEE2E2"),   # đỏ nhạt
 }
-
+# Màu badge trạng thái
 STS_COLORS = {
-    "CONFIRMED": ("#1E40AF", "#DBEAFE"),
-    "PENDING": ("#475569", "#F1F5F9"),
-    "CANCELLED": ("#991B1B", "#FEE2E2"),
+    "THÀNH CÔNG":  ("#1E40AF", "#DBEAFE"),  # xanh dương
+    "ĐANG XỬ LÝ": ("#475569", "#F1F5F9"),  # xám
+    "ĐÃ HUỶ":     ("#991B1B", "#FEE2E2"),  # đỏ nhạt
 }
 
+# Độ rộng cột (px). 0 = co giãn (stretch)
 COL = {
-    "pnr": 120,
-    "name": 0,
-    "flight": 140,
-    "seat": 100,
-    "payment": 120,
-    "status": 120,
-    "price": 100,
-    "actions": 120,
+    "pnr":     110,
+    "name":      0,    # stretch
+    "flight":  130,
+    "seat":    110,
+    "payment": 110,
+    "status":  120,
+    "price":    80,
+    "actions": 110,
 }
 
-
-# ─────────────────────────────────────
-# HELPERS
-# ─────────────────────────────────────
-def _lbl(
-    text: str,
-    size: int = 13,
-    weight: int = 400,
-    color: str = C_TEXT,
-):
-    label = QLabel(text)
-
-    font_weight = {
-        400: "normal",
-        500: "500",
-        600: "600",
-        700: "bold",
-        800: "800",
-    }.get(weight, "normal")
-
-    label.setStyleSheet(f"""
-        font-size: {size}px;
-        font-weight: {font_weight};
-        color: {color};
-        border: none;
-        background: transparent;
-    """)
-
-    return label
+# ─────────────────────────────────────────────────────────────────────────────
+# Dữ liệu mẫu (hard-code, dùng khi DB chưa sẵn sàng)
+# ─────────────────────────────────────────────────────────────────────────────
+SAMPLE: list[dict] = [
+    dict(pnr="JJXL92", name="Le Van Quan",    date="14 May 2026",
+         flight="JJ121", route="SGN-HAN", seat="12A",
+         payment="ĐÃ TRẢ",  status="THÀNH CÔNG",  price="$120"),
+    dict(pnr="JJAS21", name="Nguyen Thu Ha",   date="15 May 2026",
+         flight="JJ342", route="HAN-DAD", seat="04C",
+         payment="CHỜ TRẢ", status="ĐANG XỬ LÝ", price="$85"),
+    dict(pnr="JJPQ88", name="Tran Van Binh",   date="14 May 2026",
+         flight="JJ551", route="SGN-PQC", seat="22F",
+         payment="ĐÃ TRẢ",  status="THÀNH CÔNG",  price="$95"),
+    dict(pnr="JJKM14", name="Hoang Minh Tuan", date="15 May 2026",
+         flight="JJ207", route="DAD-HAN", seat="08B",
+         payment="CHỜ TRẢ", status="ĐANG XỬ LÝ", price="$110"),
+    dict(pnr="JJRR77", name="Pham Thi Lan",    date="14 May 2026",
+         flight="JJ890", route="HAN-SGN", seat="31E",
+         payment="ĐÃ TRẢ",  status="THÀNH CÔNG",  price="$75"),
+]
 
 
-def _separator():
-    line = QFrame()
+# ─────────────────────────────────────────────────────────────────────────────
+# Helpers
+# ─────────────────────────────────────────────────────────────────────────────
+def _lbl(text: str, size: int = 13, weight: int = 400,
+         color: str = C_TEXT, spacing: float = 0.0) -> QLabel:
+    w = {400: "normal", 500: "500", 600: "600", 700: "bold", 800: "800"}.get(weight, "normal")
+    sp = f"letter-spacing:{spacing}px;" if spacing else ""
+    l = QLabel(text)
+    l.setStyleSheet(
+        f"font-size:{size}px; font-weight:{w}; color:{color};"
+        f" background:transparent; border:none; {sp}"
+    )
+    return l
 
-    line.setFrameShape(QFrame.HLine)
 
-    line.setFixedHeight(1)
-
-    line.setStyleSheet(f"""
-        background: {C_BORDER};
-        border: none;
-    """)
-
-    return line
+def _h_sep(alpha: int = 200) -> QFrame:
+    f = QFrame()
+    f.setFrameShape(QFrame.HLine)
+    f.setFixedHeight(1)
+    f.setStyleSheet(f"background:rgba(228,230,240,{alpha}); border:none;")
+    return f
 
 
-def _icon_btn(icon: str, tooltip=""):
-
+def _icon_btn(icon: str, tip: str = "") -> QPushButton:
     btn = QPushButton(icon)
-
     btn.setFixedSize(30, 30)
-
+    btn.setToolTip(tip)
     btn.setCursor(Qt.PointingHandCursor)
-
-    btn.setToolTip(tooltip)
-
     btn.setStyleSheet(f"""
         QPushButton {{
-            background: transparent;
-            border: none;
-            border-radius: 6px;
-            color: {C_GRAY};
-            font-size: 15px;
+            background: transparent; border: none;
+            font-size: 15px; color: {C_GRAY}; border-radius: 6px;
         }}
-
-        QPushButton:hover {{
-            background: {C_LGRAY};
-            color: {C_MID};
-        }}
+        QPushButton:hover {{ background: {C_LGRAY}; color: {C_MID}; }}
+        QPushButton:pressed {{ background: {C_BORDER}; }}
     """)
-
     return btn
 
 
-# ─────────────────────────────────────
-# BADGES
-# ─────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
+# Seat Badge  ✈ 12A  (viên tối tròn)
+# ─────────────────────────────────────────────────────────────────────────────
+class SeatBadge(QWidget):
+    def __init__(self, seat: str, parent=None):
+        super().__init__(parent)
+        self.seat = seat
+        self.setFixedSize(78, 30)
+
+    def paintEvent(self, _):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        w, h = self.width(), self.height()
+
+        # Nền đen bo góc
+        p.setPen(Qt.NoPen)
+        p.setBrush(QBrush(QColor(C_DARK)))
+        bg = QPainterPath()
+        bg.addRoundedRect(0, 0, w, h, 10, 10)
+        p.drawPath(bg)
+
+        # Text  ✈ + seat
+        p.setPen(QPen(QColor("#FFFFFF")))
+        f = QFont(); f.setPointSize(9); f.setWeight(QFont.Medium)
+        p.setFont(f)
+        p.drawText(0, 0, w, h, Qt.AlignCenter, f"✈  {self.seat}")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Colored Text Badge  (thanh toán / trạng thái)
+# ─────────────────────────────────────────────────────────────────────────────
 class TextBadge(QLabel):
-
-    def __init__(self, text, fg, bg):
-        super().__init__(text)
-
+    def __init__(self, text: str, fg: str, bg: str, parent=None):
+        super().__init__(text, parent)
         self.setAlignment(Qt.AlignCenter)
-
         self.setFixedHeight(26)
-
+        self.setContentsMargins(10, 0, 10, 0)
         self.setStyleSheet(f"""
             QLabel {{
-                background: {bg};
-                color: {fg};
-                border-radius: 6px;
-                font-size: 11px;
-                font-weight: bold;
-                padding: 0 10px;
+                font-size: 11px; font-weight: 700;
+                color: {fg}; background: {bg};
+                border-radius: 6px; border: none;
+                letter-spacing: 0.5px;
             }}
         """)
 
 
-class SeatBadge(QWidget):
+# ─────────────────────────────────────────────────────────────────────────────
+# Table Header
+# ─────────────────────────────────────────────────────────────────────────────
+class TableHeader(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFixedHeight(48)
+        self.setStyleSheet("background:transparent;")
 
-    def __init__(self, seat):
-        super().__init__()
+        lay = QHBoxLayout(self)
+        lay.setContentsMargins(20, 0, 20, 0)
+        lay.setSpacing(0)
 
-        self.seat = seat
-
-        self.setFixedSize(75, 30)
-
-    def paintEvent(self, event):
-
-        painter = QPainter(self)
-
-        painter.setRenderHint(QPainter.Antialiasing)
-
-        path = QPainterPath()
-
-        path.addRoundedRect(
-            0,
-            0,
-            self.width(),
-            self.height(),
-            10,
-            10,
-        )
-
-        painter.fillPath(
-            path,
-            QBrush(QColor(C_DARK))
-        )
-
-        painter.setPen(QPen(QColor(C_WHITE)))
-
-        font = QFont()
-
-        font.setPointSize(9)
-
-        font.setBold(True)
-
-        painter.setFont(font)
-
-        painter.drawText(
-            self.rect(),
-            Qt.AlignCenter,
-            f"✈ {self.seat}"
-        )
+        cols = [
+            ("MÃ PNR",           COL["pnr"],     Qt.AlignLeft),
+            ("HÀNH KHÁCH",        0,              Qt.AlignLeft),
+            ("CHUYẾN BAY /\nTUYẾN", COL["flight"], Qt.AlignLeft),
+            ("SỐ GHẾ",           COL["seat"],    Qt.AlignCenter),
+            ("THANH\nTOÁN",      COL["payment"], Qt.AlignCenter),
+            ("TRẠNG\nTHÁI",      COL["status"],  Qt.AlignCenter),
+            ("GIÁ",              COL["price"],   Qt.AlignRight),
+            ("THAO TÁC",         COL["actions"], Qt.AlignCenter),
+        ]
+        for text, width, align in cols:
+            lbl = QLabel(text)
+            lbl.setAlignment(align | Qt.AlignVCenter)
+            lbl.setStyleSheet(
+                f"font-size:10px; font-weight:600; color:{C_GRAY};"
+                f" letter-spacing:1px; background:transparent; border:none;"
+                f" line-height:1.4;"
+            )
+            if width == 0:
+                lay.addWidget(lbl, 1)
+            else:
+                lbl.setFixedWidth(width)
+                lay.addWidget(lbl)
 
 
-# ─────────────────────────────────────
-# ROW
-# ─────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
+# Booking Row  (một dòng dữ liệu)
+# ─────────────────────────────────────────────────────────────────────────────
 class BookingRow(QWidget):
+    view_clicked   = Signal(dict)
+    edit_clicked   = Signal(dict)
+    print_clicked  = Signal(dict)
 
-    def __init__(self, data: dict):
-        super().__init__()
-
+    def __init__(self, data: dict, parent=None):
+        super().__init__(parent)
         self.data = data
-
         self.setFixedHeight(76)
+        self.setStyleSheet(f"background:{C_WHITE};")
 
+        lay = QHBoxLayout(self)
+        lay.setContentsMargins(20, 0, 20, 0)
+        lay.setSpacing(0)
+
+        # ── MÃ PNR ──────────────────────────────────────────────────────────
+        pnr_lbl = _lbl(data["pnr"], 13, 700, C_RED)
+        pnr_lbl.setFixedWidth(COL["pnr"])
+        lay.addWidget(pnr_lbl)
+
+        # ── HÀNH KHÁCH ──────────────────────────────────────────────────────
+        pax_col = QVBoxLayout()
+        pax_col.setSpacing(3)
+        pax_col.setAlignment(Qt.AlignVCenter)
+        pax_col.addWidget(_lbl(data["name"], 13, 700, C_TEXT))
+        pax_col.addWidget(_lbl(data["date"], 11, 400, C_GRAY))
+        lay.addLayout(pax_col, 1)
+
+        # ── CHUYẾN BAY / TUYẾN ──────────────────────────────────────────────
+        flt_col = QVBoxLayout()
+        flt_col.setSpacing(3)
+        flt_col.setAlignment(Qt.AlignVCenter)
+        flt_col.addWidget(_lbl(data["flight"], 13, 700, C_TEXT))
+        flt_col.addWidget(_lbl(data["route"],  11, 400, C_GRAY))
+        flt_w = QWidget()
+        flt_w.setFixedWidth(COL["flight"])
+        flt_w.setStyleSheet("background:transparent;")
+        flt_w.setLayout(flt_col)
+        lay.addWidget(flt_w)
+
+        # ── SỐ GHẾ ──────────────────────────────────────────────────────────
+        seat_w = QWidget()
+        seat_w.setFixedWidth(COL["seat"])
+        seat_w.setStyleSheet("background:transparent;")
+        sl = QHBoxLayout(seat_w)
+        sl.setContentsMargins(0, 0, 0, 0)
+        sl.setAlignment(Qt.AlignCenter)
+        sl.addWidget(SeatBadge(data["seat"]))
+        lay.addWidget(seat_w)
+
+        # ── THANH TOÁN ──────────────────────────────────────────────────────
+        pay_fg, pay_bg = PAY_COLORS.get(data["payment"], (C_GRAY, C_LGRAY))
+        pay_badge = TextBadge(data["payment"], pay_fg, pay_bg)
+        pay_badge.setFixedWidth(COL["payment"] - 10)
+        pay_w = QWidget()
+        pay_w.setFixedWidth(COL["payment"])
+        pay_w.setStyleSheet("background:transparent;")
+        pwl = QHBoxLayout(pay_w)
+        pwl.setContentsMargins(0, 0, 0, 0)
+        pwl.setAlignment(Qt.AlignCenter)
+        pwl.addWidget(pay_badge)
+        lay.addWidget(pay_w)
+
+        # ── TRẠNG THÁI ──────────────────────────────────────────────────────
+        sts_fg, sts_bg = STS_COLORS.get(data["status"], (C_GRAY, C_LGRAY))
+        sts_badge = TextBadge(data["status"], sts_fg, sts_bg)
+        sts_badge.setFixedWidth(COL["status"] - 10)
+        sts_w = QWidget()
+        sts_w.setFixedWidth(COL["status"])
+        sts_w.setStyleSheet("background:transparent;")
+        swl = QHBoxLayout(sts_w)
+        swl.setContentsMargins(0, 0, 0, 0)
+        swl.setAlignment(Qt.AlignCenter)
+        swl.addWidget(sts_badge)
+        lay.addWidget(sts_w)
+
+        # ── GIÁ ─────────────────────────────────────────────────────────────
+        price_lbl = _lbl(data["price"], 14, 700, C_TEXT)
+        price_lbl.setFixedWidth(COL["price"])
+        price_lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        lay.addWidget(price_lbl)
+
+        # ── THAO TÁC ────────────────────────────────────────────────────────
+        act_w = QWidget()
+        act_w.setFixedWidth(COL["actions"])
+        act_w.setStyleSheet("background:transparent;")
+        al = QHBoxLayout(act_w)
+        al.setContentsMargins(0, 0, 0, 0)
+        al.setSpacing(4)
+        al.setAlignment(Qt.AlignCenter)
+
+        btn_view  = _icon_btn("👁",  "Xem chi tiết")
+        btn_edit  = _icon_btn("✏",  "Chỉnh sửa")
+        btn_print = _icon_btn("🖨",  "In vé")
+
+        btn_view.clicked.connect(lambda: self.view_clicked.emit(self.data))
+        btn_edit.clicked.connect(lambda: self.edit_clicked.emit(self.data))
+        btn_print.clicked.connect(lambda: self.print_clicked.emit(self.data))
+
+        al.addWidget(btn_view)
+        al.addWidget(btn_edit)
+        al.addWidget(btn_print)
+        lay.addWidget(act_w)
+
+    def enterEvent(self, e):
+        self.setStyleSheet(f"background:#FAFBFF;")
+
+    def leaveEvent(self, e):
+        self.setStyleSheet(f"background:{C_WHITE};")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Search Bar  (card trắng + viền đỏ trái)
+# ─────────────────────────────────────────────────────────────────────────────
+class SearchBar(QWidget):
+    search_changed  = Signal(str)
+    filter_changed  = Signal(str)
+    refresh_clicked = Signal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFixedHeight(56)
         self.setStyleSheet(f"""
-            background: {C_WHITE};
+            SearchBar {{
+                background: {C_WHITE};
+                border: 1px solid {C_BORDER};
+                border-left: 3px solid {C_RED};
+                border-radius: 12px;
+            }}
         """)
 
-        layout = QHBoxLayout(self)
+        lay = QHBoxLayout(self)
+        lay.setContentsMargins(16, 0, 16, 0)
+        lay.setSpacing(12)
 
-        layout.setContentsMargins(20, 0, 20, 0)
+        # Icon tìm kiếm
+        search_ico = _lbl("🔍", 16, 400, C_GRAY)
+        lay.addWidget(search_ico)
 
-        layout.setSpacing(0)
-
-        # PNR
-        pnr = _lbl(
-            data["pnr"],
-            13,
-            700,
-            C_RED
+        # Input
+        self.search_input = QLineEdit()
+        self.search_input.setPlaceholderText(
+            "Tìm theo mã PNR, tên khách, email hoặc số hiệu bay..."
         )
+        self.search_input.setFrame(False)
+        self.search_input.setStyleSheet(f"""
+            QLineEdit {{
+                background: transparent; border: none;
+                font-size: 13px; color: {C_TEXT};
+            }}
+        """)
+        self.search_input.textChanged.connect(self.search_changed)
+        lay.addWidget(self.search_input, 1)
 
-        pnr.setFixedWidth(COL["pnr"])
+        # Separator
+        sep = QFrame()
+        sep.setFrameShape(QFrame.VLine)
+        sep.setFixedWidth(1)
+        sep.setStyleSheet(f"background:{C_BORDER}; border:none;")
+        lay.addWidget(sep)
 
-        layout.addWidget(pnr)
+        # Dropdown trạng thái
+        self.combo = QComboBox()
+        self.combo.addItems([
+            "TẤT CẢ TRẠNG THÁI",
+            "THÀNH CÔNG",
+            "ĐANG XỬ LÝ",
+            "ĐÃ HUỶ",
+        ])
+        self.combo.setFixedWidth(200)
+        self.combo.setFixedHeight(34)
+        self.combo.setStyleSheet(f"""
+            QComboBox {{
+                background: transparent; border: none;
+                font-size: 12px; font-weight: 600;
+                color: {C_MID}; padding: 0 8px;
+            }}
+            QComboBox::drop-down {{ border: none; width: 20px; }}
+            QComboBox::down-arrow {{
+                image: none;
+                border-left: 4px solid transparent;
+                border-right: 4px solid transparent;
+                border-top: 5px solid {C_GRAY};
+                width: 0; height: 0;
+            }}
+            QComboBox QAbstractItemView {{
+                background: {C_WHITE}; border: 1px solid {C_BORDER};
+                border-radius: 8px; padding: 4px;
+                selection-background-color: {C_RED_L};
+                selection-color: {C_RED};
+                font-size: 12px; font-weight: 600;
+            }}
+        """)
+        self.combo.currentTextChanged.connect(self.filter_changed)
+        lay.addWidget(self.combo)
 
-        # PASSENGER
-        passenger_col = QVBoxLayout()
+        # Nút Refresh
+        ref_btn = _icon_btn("↻", "Làm mới dữ liệu")
+        ref_btn.setFixedSize(32, 32)
+        ref_btn.clicked.connect(self.refresh_clicked)
+        lay.addWidget(ref_btn)
 
-        passenger_col.setSpacing(3)
-
-        passenger_col.addWidget(
-            _lbl(
-                data["name"],
-                13,
-                700,
-            )
-        )
-
-        passenger_col.addWidget(
-            _lbl(
-                data["date"],
-                11,
-                400,
-                C_GRAY
-            )
-        )
-
-        layout.addLayout(
-            passenger_col,
-            1
-        )
-
-        # FLIGHT
-        flight_col = QVBoxLayout()
-
-        flight_col.setSpacing(3)
-
-        flight_col.addWidget(
-            _lbl(
-                data["flight"],
-                13,
-                700
-            )
-        )
-
-        flight_col.addWidget(
-            _lbl(
-                data["route"],
-                11,
-                400,
-                C_GRAY
-            )
-        )
-
-        flight_wrap = QWidget()
-
-        flight_wrap.setFixedWidth(
-            COL["flight"]
-        )
-
-        fw_layout = QVBoxLayout(flight_wrap)
-
-        fw_layout.setContentsMargins(0, 0, 0, 0)
-
-        fw_layout.addLayout(flight_col)
-
-        layout.addWidget(flight_wrap)
-
-        # SEAT
-        seat_wrap = QWidget()
-
-        seat_wrap.setFixedWidth(
-            COL["seat"]
-        )
-
-        sw_layout = QHBoxLayout(seat_wrap)
-
-        sw_layout.setAlignment(Qt.AlignCenter)
-
-        sw_layout.addWidget(
-            SeatBadge(data["seat"])
-        )
-
-        layout.addWidget(seat_wrap)
-
-        # PAYMENT
-        pay_fg, pay_bg = PAY_COLORS.get(
-            data["payment"],
-            (C_GRAY, C_LGRAY)
-        )
-
-        pay_badge = TextBadge(
-            data["payment"],
-            pay_fg,
-            pay_bg
-        )
-
-        pay_wrap = QWidget()
-
-        pay_wrap.setFixedWidth(
-            COL["payment"]
-        )
-
-        pw_layout = QHBoxLayout(pay_wrap)
-
-        pw_layout.setAlignment(Qt.AlignCenter)
-
-        pw_layout.addWidget(pay_badge)
-
-        layout.addWidget(pay_wrap)
-
-        # STATUS
-        sts_fg, sts_bg = STS_COLORS.get(
-            data["status"],
-            (C_GRAY, C_LGRAY)
-        )
-
-        sts_badge = TextBadge(
-            data["status"],
-            sts_fg,
-            sts_bg
-        )
-
-        sts_wrap = QWidget()
-
-        sts_wrap.setFixedWidth(
-            COL["status"]
-        )
-
-        st_layout = QHBoxLayout(sts_wrap)
-
-        st_layout.setAlignment(Qt.AlignCenter)
-
-        st_layout.addWidget(sts_badge)
-
-        layout.addWidget(sts_wrap)
-
-        # PRICE
-        price = _lbl(
-            data["price"],
-            14,
-            700
-        )
-
-        price.setFixedWidth(
-            COL["price"]
-        )
-
-        price.setAlignment(
-            Qt.AlignRight | Qt.AlignVCenter
-        )
-
-        layout.addWidget(price)
-
-        # ACTIONS
-        actions = QWidget()
-
-        actions.setFixedWidth(
-            COL["actions"]
-        )
-
-        actions_layout = QHBoxLayout(actions)
-
-        actions_layout.setSpacing(4)
-
-        actions_layout.setAlignment(Qt.AlignCenter)
-
-        btn_view = _icon_btn("👁")
-
-        btn_edit = _icon_btn("✏")
-
-        btn_print = _icon_btn("🖨")
-
-        btn_view.clicked.connect(
-            lambda:
-            QMessageBox.information(
-                self,
-                "Booking",
-                f"Booking: {data['pnr']}"
-            )
-        )
-
-        actions_layout.addWidget(btn_view)
-
-        actions_layout.addWidget(btn_edit)
-
-        actions_layout.addWidget(btn_print)
-
-        layout.addWidget(actions)
+        # Icon filter
+        filter_ico = _icon_btn("⊟", "Bộ lọc nâng cao")
+        filter_ico.setFixedSize(32, 32)
+        lay.addWidget(filter_ico)
 
 
-# ─────────────────────────────────────
-# TABLE
-# ─────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
+# Booking Table  (header + danh sách rows)
+# ─────────────────────────────────────────────────────────────────────────────
 class BookingTable(QWidget):
-
-    def __init__(self):
-        super().__init__()
-
+    def __init__(self, parent=None):
+        super().__init__(parent)
         self.setStyleSheet(f"""
-            background: {C_WHITE};
-            border: 1px solid {C_BORDER};
-            border-radius: 14px;
+            BookingTable {{
+                background: {C_WHITE};
+                border: 1px solid {C_BORDER};
+                border-radius: 14px;
+            }}
         """)
 
-        self.root = QVBoxLayout(self)
+        self._root = QVBoxLayout(self)
+        self._root.setContentsMargins(0, 0, 0, 0)
+        self._root.setSpacing(0)
 
-        self.root.setContentsMargins(0, 0, 0, 0)
+        # Header cố định
+        self._root.addWidget(TableHeader())
+        self._root.addWidget(_h_sep())
 
-        self.root.setSpacing(0)
+        # Vùng chứa rows (sẽ được xoá + thêm lại khi refresh/filter)
+        self._rows_container = QWidget()
+        self._rows_container.setStyleSheet("background:transparent;")
+        self._rows_layout = QVBoxLayout(self._rows_container)
+        self._rows_layout.setContentsMargins(0, 0, 0, 0)
+        self._rows_layout.setSpacing(0)
+        self._root.addWidget(self._rows_container)
+        self._root.addStretch()
 
-        self.rows_widget = QWidget()
+        self._current_rows: list[BookingRow] = []
 
-        self.rows_layout = QVBoxLayout(
-            self.rows_widget
-        )
-
-        self.rows_layout.setContentsMargins(
-            0,
-            0,
-            0,
-            0
-        )
-
-        self.rows_layout.setSpacing(0)
-
-        self.root.addWidget(self.rows_widget)
-
-    def populate(self, data):
-
-        while self.rows_layout.count():
-
-            item = self.rows_layout.takeAt(0)
-
+    # ── Cập nhật nội dung bảng ──────────────────────────────────────────────
+    def populate(self, data: list[dict]):
+        # Xoá rows cũ
+        while self._rows_layout.count():
+            item = self._rows_layout.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
+        self._current_rows.clear()
 
         if not data:
-
-            empty = _lbl(
-                "No bookings found.",
-                14,
-                400,
-                C_GRAY
-            )
-
+            empty = _lbl("Không tìm thấy kết quả phù hợp.", 14, 400, C_GRAY)
             empty.setAlignment(Qt.AlignCenter)
-
-            empty.setContentsMargins(
-                0,
-                50,
-                0,
-                50
-            )
-
-            self.rows_layout.addWidget(empty)
-
+            empty.setContentsMargins(0, 40, 0, 40)
+            self._rows_layout.addWidget(empty)
             return
 
         for i, item in enumerate(data):
-
             row = BookingRow(item)
-
-            self.rows_layout.addWidget(row)
-
+            row.view_clicked.connect(self._on_view)
+            row.edit_clicked.connect(self._on_edit)
+            row.print_clicked.connect(self._on_print)
+            self._rows_layout.addWidget(row)
+            self._current_rows.append(row)
             if i < len(data) - 1:
-                self.rows_layout.addWidget(
-                    _separator()
+                self._rows_layout.addWidget(_h_sep())
+
+    # ── Handlers ────────────────────────────────────────────────────────────
+    def _on_view(self, data: dict):
+        QMessageBox.information(
+            self, "Chi tiết đặt chỗ",
+            f"Mã PNR : {data['pnr']}\n"
+            f"Hành khách: {data['name']}\n"
+            f"Chuyến bay: {data['flight']}  ({data['route']})\n"
+            f"Số ghế   : {data['seat']}\n"
+            f"Thanh toán: {data['payment']}\n"
+            f"Trạng thái: {data['status']}\n"
+            f"Giá vé   : {data['price']}"
+        )
+
+    def _on_edit(self, data: dict):
+        QMessageBox.information(self, "Chỉnh sửa",
+                                f"Mở form chỉnh sửa booking {data['pnr']}…")
+
+    def _on_print(self, data: dict):
+        QMessageBox.information(self, "In vé",
+                                f"Đang in vé cho {data['name']} — {data['pnr']}…")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Page Header
+# ─────────────────────────────────────────────────────────────────────────────
+class PageHeader(QWidget):
+    new_clicked    = Signal()
+    export_clicked = Signal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFixedHeight(72)
+        self.setStyleSheet("background:transparent; border:none;")
+
+        lay = QHBoxLayout(self)
+        lay.setContentsMargins(0, 0, 0, 0)
+
+        # Tiêu đề
+        text_col = QVBoxLayout()
+        text_col.setSpacing(4)
+        text_col.addWidget(_lbl("Quản lý Đặt chỗ", 26, 800, C_TEXT))
+        text_col.addWidget(_lbl("Theo dõi và quản lý danh sách hành khách đặt vé",
+                                13, 400, C_GRAY))
+        lay.addLayout(text_col)
+        lay.addStretch()
+
+        # Nút XUẤT DỮ LIỆU
+        export = QPushButton("  ↓  XUẤT DỮ LIỆU")
+        export.setFixedHeight(42)
+        export.setCursor(Qt.PointingHandCursor)
+        export.clicked.connect(self.export_clicked)
+        export.setStyleSheet(f"""
+            QPushButton {{
+                background: {C_WHITE}; border: 1.5px solid {C_BORDER};
+                border-radius: 10px; font-size: 12px; font-weight: 700;
+                color: {C_MID}; padding: 0 18px; letter-spacing: 0.5px;
+            }}
+            QPushButton:hover {{ background: {C_LGRAY}; border-color: {C_GRAY}; }}
+            QPushButton:pressed {{ background: {C_BORDER}; }}
+        """)
+
+        # Nút ĐẶT CHỖ MỚI
+        new_btn = QPushButton("  +  ĐẶT CHỖ MỚI")
+        new_btn.setFixedHeight(42)
+        new_btn.setCursor(Qt.PointingHandCursor)
+        new_btn.clicked.connect(self.new_clicked)
+        new_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: {C_RED}; border: none;
+                border-radius: 10px; font-size: 12px; font-weight: 800;
+                color: white; padding: 0 20px; letter-spacing: 0.5px;
+            }}
+            QPushButton:hover {{ background: #C62828; }}
+            QPushButton:pressed {{ background: #B71C1C; }}
+        """)
+
+        lay.addWidget(export)
+        lay.addSpacing(10)
+        lay.addWidget(new_btn)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Footer
+# ─────────────────────────────────────────────────────────────────────────────
+class Footer(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFixedHeight(40)
+        self.setStyleSheet("background:transparent; border:none;")
+
+        lay = QHBoxLayout(self)
+        lay.setContentsMargins(0, 0, 0, 0)
+
+        lay.addWidget(_lbl(
+            "© 2026 HỆ THỐNG QUẢN TRỊ JETJET  /  LƯU HÀNH NỘI BỘ",
+            10, 400, C_GRAY, 0.5
+        ))
+        lay.addStretch()
+        lay.addWidget(_lbl("CHÍNH SÁCH BẢO MẬT", 10, 600, C_GRAY, 1.0))
+        lay.addSpacing(20)
+
+        dot = QLabel("●")
+        dot.setStyleSheet(f"color:{C_RED}; font-size:10px; background:transparent; border:none;")
+        lay.addWidget(dot)
+        lay.addSpacing(4)
+        lay.addWidget(_lbl("PHIÊN BẢN 2.5.0 ÔN ĐỊNH", 10, 700, C_RED, 0.5))
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# DB loader  (fallback về SAMPLE nếu DB chưa sẵn sàng)
+# ─────────────────────────────────────────────────────────────────────────────
+def _load_from_db() -> list[dict] | None:
+    try:
+        from database.db import get_connection as connect_db
+
+        conn = connect_db()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT
+                b.booking_id,
+                p.full_name,
+                b.booking_date,
+                f.flight_id,
+                f.departure,
+                f.destination,
+                b.seat_number,
+                b.payment_status,
+                b.booking_status,
+                b.total_amount
+            FROM bookings b
+            JOIN passengers p
+                ON b.passenger_id = p.passenger_id
+            JOIN flights f
+                ON b.flight_id = f.flight_id
+            ORDER BY b.booking_date DESC
+        """)
+
+        rows = cursor.fetchall()
+        conn.close()
+
+        if not rows:
+            return None
+
+        payment_map = {
+            "Paid": "ĐÃ TRẢ",
+            "Pending": "CHỜ TRẢ",
+            "Cancelled": "ĐÃ HUỶ"
+        }
+
+        status_map = {
+            "Confirmed": "THÀNH CÔNG",
+            "Pending": "ĐANG XỬ LÝ",
+            "Cancelled": "ĐÃ HUỶ"
+        }
+
+        result = []
+
+        for r in rows:
+            (
+                booking_id,
+                full_name,
+                booking_date,
+                flight_id,
+                departure,
+                destination,
+                seat_number,
+                payment_status,
+                booking_status,
+                total_amount
+            ) = r
+
+            # Tạo mã PNR
+            pnr = f"JJ{booking_id:04d}"
+
+            # Format ngày
+            try:
+                dt = datetime.strptime(
+                    str(booking_date)[:10],
+                    "%Y-%m-%d"
                 )
+                date_str = dt.strftime("%d %b %Y")
+            except Exception:
+                date_str = str(booking_date)
+
+            result.append({
+                "pnr": pnr,
+                "name": full_name,
+                "date": date_str,
+                "flight": f"JJ{flight_id:03d}",
+                "route": f"{departure}-{destination}",
+                "seat": seat_number or "--",
+                "payment": payment_map.get(
+                    payment_status,
+                    "CHỜ TRẢ"
+                ),
+                "status": status_map.get(
+                    booking_status,
+                    "ĐANG XỬ LÝ"
+                ),
+                "price": f"${int(total_amount)}"
+                if total_amount else "$0",
+            })
+
+        return result
+
+    except Exception as exc:
+        print(f"[BookingPage] DB ERROR: {exc}")
+        return None
 
 
-# ─────────────────────────────────────
-# SEARCH BAR
-# ─────────────────────────────────────
-class SearchBar(QWidget):
-
-    search_changed = Signal(str)
-
-    def __init__(self):
-        super().__init__()
-
-        self.setFixedHeight(56)
-
-        self.setStyleSheet(f"""
-            background: {C_WHITE};
-            border: 1px solid {C_BORDER};
-            border-left: 3px solid {C_RED};
-            border-radius: 12px;
-        """)
-
-        layout = QHBoxLayout(self)
-
-        layout.setContentsMargins(
-            16,
-            0,
-            16,
-            0
-        )
-
-        icon = _lbl(
-            "🔍",
-            16,
-            400,
-            C_GRAY
-        )
-
-        layout.addWidget(icon)
-
-        self.search_input = QLineEdit()
-
-        self.search_input.setPlaceholderText(
-            "Search bookings..."
-        )
-
-        self.search_input.setFrame(False)
-
-        self.search_input.textChanged.connect(
-            self.search_changed
-        )
-
-        self.search_input.setStyleSheet(f"""
-            background: transparent;
-            border: none;
-            font-size: 13px;
-            color: {C_TEXT};
-        """)
-
-        layout.addWidget(
-            self.search_input,
-            1
-        )
-
-
-# ─────────────────────────────────────
-# PAGE
-# ─────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
+# Booking Page  —  tổng hợp
+# ─────────────────────────────────────────────────────────────────────────────
 class BookingsPage(QWidget):
+    """
+    Trang quản lý đặt chỗ.
 
-    def __init__(self):
-        super().__init__()
+    Tích hợp vào MainWindow:
+        from ui.pages.booking_page import BookingPage
+        self._pages.addWidget(BookingPage())
+    """
 
-        self.setStyleSheet(f"""
-            background: {C_BG};
-        """)
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setStyleSheet(f"background:{C_BG};")
+        self._all_data: list[dict] = []
 
-        self.all_data = []
+        # ── Scroll wrapper ───────────────────────────────────────────────────
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setStyleSheet("background:transparent; border:none;")
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
         outer = QVBoxLayout(self)
-
         outer.setContentsMargins(0, 0, 0, 0)
-
-        scroll = QScrollArea()
-
-        scroll.setWidgetResizable(True)
-
-        scroll.setFrameShape(QFrame.NoFrame)
-
         outer.addWidget(scroll)
 
         inner = QWidget()
-
+        inner.setStyleSheet(f"background:{C_BG};")
         scroll.setWidget(inner)
 
         root = QVBoxLayout(inner)
-
-        root.setContentsMargins(
-            28,
-            20,
-            28,
-            20
-        )
-
+        root.setContentsMargins(28, 20, 28, 20)
         root.setSpacing(16)
 
-        # TITLE
-        title = _lbl(
-            "Booking Management",
-            26,
-            800
-        )
+        # ── Page header ─────────────────────────────────────────────────────
+        hdr = PageHeader()
+        hdr.new_clicked.connect(self._on_new)
+        hdr.export_clicked.connect(self._on_export)
+        root.addWidget(hdr)
 
-        root.addWidget(title)
+        # ── Search bar ──────────────────────────────────────────────────────
+        self._search_bar = SearchBar()
+        self._search_bar.search_changed.connect(self._apply_filter)
+        self._search_bar.filter_changed.connect(self._apply_filter)
+        self._search_bar.refresh_clicked.connect(self.refresh)
+        root.addWidget(self._search_bar)
 
-        subtitle = _lbl(
-            "Manage airline bookings",
-            13,
-            400,
-            C_GRAY
-        )
+        # ── Table ────────────────────────────────────────────────────────────
+        self._table = BookingTable()
+        root.addWidget(self._table)
 
-        root.addWidget(subtitle)
-
-        # SEARCH
-        self.search_bar = SearchBar()
-
-        self.search_bar.search_changed.connect(
-            self.apply_filter
-        )
-
-        root.addWidget(self.search_bar)
-
-        # TABLE
-        self.table = BookingTable()
-
-        root.addWidget(self.table)
-
+        # ── Footer ───────────────────────────────────────────────────────────
         root.addStretch()
+        root.addWidget(_h_sep())
+        root.addWidget(Footer())
 
+        # ── Load dữ liệu ─────────────────────────────────────────────────────
         self.refresh()
 
-    # ─────────────────────────────────
-    # LOAD DATA
-    # ─────────────────────────────────
+    # ── Public API ──────────────────────────────────────────────────────────
     def refresh(self):
+        """Tải lại dữ liệu từ DB (hoặc sample nếu DB chưa có)."""
+        db_data = _load_from_db()
+        self._all_data = db_data if db_data else list(SAMPLE)
+        self._apply_filter()
 
-        self.all_data = []
+    # ── Filter ───────────────────────────────────────────────────────────────
+    def _apply_filter(self, *_):
+        query  = self._search_bar.search_input.text().strip().lower()
+        choice = self._search_bar.combo.currentText()
 
-        try:
-
-            bookings = get_all_bookings()
-
-            for booking in bookings:
-
-                pnr = ''.join(
-                    random.choices(
-                        string.ascii_uppercase +
-                        string.digits,
-                        k=6
-                    )
-                )
-
-                self.all_data.append({
-                    "pnr":
-                        pnr,
-
-                    "name":
-                        booking.passenger_name,
-
-                    "date":
-                        str(booking.booking_date),
-
-                    "flight":
-                        booking.flight_number,
-
-                    "route":
-                        f"{booking.departure}-{booking.destination}",
-
-                    "seat":
-                        booking.seat_number or "N/A",
-
-                    "payment":
-                        "PAID",
-
-                    "status":
-                        booking.status.upper(),
-
-                    "price":
-                        f"${booking.total_price}",
-                })
-
-        except Exception as e:
-
-            print(
-                f"[BookingPage] {e}"
-            )
-
-        self.apply_filter()
-
-    # ─────────────────────────────────
-    # FILTER
-    # ─────────────────────────────────
-    def apply_filter(self, *_):
-
-        query = (
-            self.search_bar
-            .search_input
-            .text()
-            .lower()
-            .strip()
-        )
-
-        data = self.all_data
-
+        filtered = self._all_data
+        # Lọc theo trạng thái
+        if choice != "TẤT CẢ TRẠNG THÁI":
+            filtered = [r for r in filtered if r["status"] == choice]
+        # Lọc theo text tìm kiếm
         if query:
-
-            data = [
-                item
-                for item in data
-                if (
-                    query in item["pnr"].lower()
-                    or query in item["name"].lower()
-                    or query in item["flight"].lower()
-                )
+            filtered = [
+                r for r in filtered
+                if (query in r["pnr"].lower()
+                    or query in r["name"].lower()
+                    or query in r["flight"].lower()
+                    or query in r["route"].lower())
             ]
+        self._table.populate(filtered)
 
-        self.table.populate(data)
+    # ── Handlers ─────────────────────────────────────────────────────────────
+    def _on_new(self):
+        QMessageBox.information(self, "Đặt chỗ mới",
+                                "Mở form đặt chỗ mới…\n(Tích hợp form sau)")
+
+    def _on_export(self):
+        QMessageBox.information(self, "Xuất dữ liệu",
+                                "Đang xuất danh sách đặt chỗ ra file CSV…")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Chạy thử độc lập
+# ─────────────────────────────────────────────────────────────────────────────
+if __name__ == "__main__":
+    import sys
+    app = QApplication(sys.argv)
+    app.setStyle("Fusion")
+    win = QMainWindow()
+    win.setWindowTitle("JetJet Air — Quản lý Đặt chỗ")
+    win.resize(1380, 860)
+    win.setCentralWidget(BookingsPage())
+    win.show()
+    sys.exit(app.exec())

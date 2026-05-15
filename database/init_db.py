@@ -41,19 +41,13 @@ def init_db():
         CREATE TABLE IF NOT EXISTS accounts (
 
             account_id INTEGER PRIMARY KEY AUTOINCREMENT,
-
             username TEXT NOT NULL UNIQUE,
-
             email TEXT NOT NULL UNIQUE,
-
             password_hash TEXT NOT NULL,
-
             full_name TEXT,
-
-            role TEXT NOT NULL DEFAULT 'staff',
-
+            role TEXT NOT NULL DEFAULT 'customer',
+            phone TEXT,
             created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-
             last_login TEXT
         )
     """)
@@ -65,27 +59,19 @@ def init_db():
         CREATE TABLE IF NOT EXISTS flights (
 
             flight_id INTEGER PRIMARY KEY AUTOINCREMENT,
-
             flight_number TEXT NOT NULL,
             airline_name TEXT NOT NULL,
-
             departure TEXT NOT NULL,
             destination TEXT NOT NULL,
-
             departure_time TEXT NOT NULL,
             arrival_time TEXT NOT NULL,
-
             available_seats INTEGER NOT NULL,
             total_seats INTEGER NOT NULL,
-
             ticket_price REAL NOT NULL,
-
             status TEXT DEFAULT 'scheduled',
-
             aircraft TEXT,
             gate TEXT,
             terminal TEXT,
-
             created_at TEXT DEFAULT CURRENT_TIMESTAMP
         )
     """)
@@ -116,31 +102,19 @@ def init_db():
         CREATE TABLE IF NOT EXISTS bookings (
 
             booking_id INTEGER PRIMARY KEY AUTOINCREMENT,
-
             booking_reference TEXT UNIQUE,
-
             passenger_id INTEGER,
-
             flight_id INTEGER,
-
             seat_number TEXT,
-
             booking_class TEXT DEFAULT 'Economy',
-
             total_amount REAL,
-
             payment_status TEXT DEFAULT 'Pending',
-
             booking_status TEXT DEFAULT 'Pending',
-
             booking_date TEXT DEFAULT CURRENT_TIMESTAMP,
-
             created_by TEXT,
-
             FOREIGN KEY(passenger_id)
                 REFERENCES passengers(passenger_id)
                 ON DELETE CASCADE,
-
             FOREIGN KEY(flight_id)
                 REFERENCES flights(flight_id)
                 ON DELETE CASCADE
@@ -154,19 +128,12 @@ def init_db():
         CREATE TABLE IF NOT EXISTS payments (
 
             payment_id INTEGER PRIMARY KEY AUTOINCREMENT,
-
             booking_id INTEGER,
-
             payment_method TEXT,
-
             payment_status TEXT DEFAULT 'Pending',
-
             amount REAL,
-
             transaction_code TEXT,
-
             paid_at TEXT,
-
             FOREIGN KEY(booking_id)
                 REFERENCES bookings(booking_id)
                 ON DELETE CASCADE
@@ -180,17 +147,11 @@ def init_db():
         CREATE TABLE IF NOT EXISTS tickets (
 
             ticket_id INTEGER PRIMARY KEY AUTOINCREMENT,
-
             booking_id INTEGER,
-
             ticket_number TEXT UNIQUE,
-
             pnr_code TEXT UNIQUE,
-
             issue_date TEXT DEFAULT CURRENT_TIMESTAMP,
-
             qr_data TEXT,
-
             FOREIGN KEY(booking_id)
                 REFERENCES bookings(booking_id)
                 ON DELETE CASCADE
@@ -225,17 +186,11 @@ def init_db():
         CREATE TABLE IF NOT EXISTS email_logs (
 
             email_log_id INTEGER PRIMARY KEY AUTOINCREMENT,
-
             passenger_id INTEGER,
-
             recipient_email TEXT,
-
             email_type TEXT,
-
             sent_at TEXT DEFAULT CURRENT_TIMESTAMP,
-
             status TEXT,
-
             FOREIGN KEY(passenger_id)
                 REFERENCES passengers(passenger_id)
                 ON DELETE CASCADE
@@ -249,9 +204,7 @@ def init_db():
         CREATE TABLE IF NOT EXISTS system_settings (
 
             setting_id INTEGER PRIMARY KEY AUTOINCREMENT,
-
             setting_key TEXT UNIQUE,
-
             setting_value TEXT
         )
     """)
