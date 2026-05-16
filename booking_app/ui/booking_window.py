@@ -20,6 +20,10 @@ from PySide6.QtWidgets import (
     QLineEdit, QComboBox, QDateEdit, QStackedWidget,
     QGraphicsDropShadowEffect, QDialog, QMessageBox
 )
+from booking_app.ui.promotion import PromotionPage
+from booking_app.ui.cur_mem import CurrentMemberPage
+from booking_app.ui.members import MembersPage
+from booking_app.ui.history import HistoryPage
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Màu sắc
@@ -972,10 +976,26 @@ class BookingWindow(QMainWindow):
         self._flights_page = FlightsPage(account)
         self._history_page = HistoryPage()
 
-        self._stack.addWidget(self._flights_page)        # 0
-        self._stack.addWidget(self._history_page)        # 1
-        self._stack.addWidget(PlaceholderPage("🎁", "Khuyến Mãi"))  # 2
-        self._stack.addWidget(PlaceholderPage("◎",  "Thông Tin"))   # 3
+        # 1. Khởi tạo thực tế các trang chức năng hội viên mới thay cho Placeholder
+        self._promo_page = PromotionPage()
+        self._members_page = MembersPage()
+        self._cur_mem_page = CurrentMemberPage()
+
+        # 2. Thêm các trang vào bộ quản lý Stack theo thứ tự Index
+        self._stack.addWidget(self._flights_page)        # Index 0
+        self._stack.addWidget(self._history_page)        # Index 1
+        self._stack.addWidget(self._promo_page)          # Index 2: Trang khuyến mãi thật sự
+        self._stack.addWidget(PlaceholderPage("◎",  "Thông Tin"))   # Index 3
+        self._stack.addWidget(self._members_page)        # Index 4: Trang điền đơn kích hoạt (Ảnh 2)
+        self._stack.addWidget(self._cur_mem_page)        # Index 5: Trang trạng thái thẻ Vàng (Ảnh 3)
+
+        # 3. ── KẾT NỐI LUỒNG TƯƠNG TÁC GIỮA CÁC FILE GIAO DIỆN ─────────────────
+        
+        # Nhấn "Kích hoạt hội viên" ở Ảnh 1 (Trang 2) -> Chuyển sang Form đăng ký Ảnh 2 (Trang 4)
+        self._promo_page.activate_member_clicked.connect(lambda: self._stack.setCurrentIndex(4))
+        
+        # Nhấn "Xác nhận đăng ký" ở Ảnh 2 (Trang 4) -> Chuyển sang thẻ thành viên Vàng Ảnh 3 (Trang 5)
+        self._members_page.register_success.connect(lambda: self._stack.setCurrentIndex(5))
 
         root.addWidget(self._stack, 1)
 

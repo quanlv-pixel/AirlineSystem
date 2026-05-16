@@ -1,7 +1,7 @@
 """
 passenger_info_page.py
 ----------------------
-Ảnh 3 — Thông tin Hành khách: Bước 4
+Ảnh 3 — Thông tin Hành khách: Bước 3
 Hiển thị khi nhấn "TIẾP TỤC ĐẶT CHỖ" ở trang chi tiết chuyến bay.
 """
 from __future__ import annotations
@@ -98,7 +98,7 @@ class SectionCard(QWidget):
         self._root.addLayout(row)
         self._root.addSpacing(16)
 
-    def add_field(self, label_text: str, widget: QWidget, full_width=False):
+    def add_field(self, label_text: str, widget: QWidget):
         """Add a labeled field."""
         col = QVBoxLayout(); col.setSpacing(6)
         col.addWidget(_field_label(label_text))
@@ -158,6 +158,13 @@ class BookingSummaryCard(QWidget):
         root.addSpacing(20)
         root.addWidget(h_sep())
         root.addSpacing(20)
+        
+        # Báo lỗi
+        self.err_lbl = QLabel("")
+        self.err_lbl.setAlignment(Qt.AlignCenter)
+        self.err_lbl.setStyleSheet(f"color: {C_RED}; font-size: 12px; font-weight: bold;")
+        root.addWidget(self.err_lbl)
+        root.addSpacing(10)
 
         btn = red_btn("TIẾP TỤC CHỌN GHẾ  →", 52)
         btn.clicked.connect(self.proceed)
@@ -197,7 +204,7 @@ class PassengerInfoPage(QWidget):
 
         root.addLayout(page_header(
             "Thông tin Hành khách",
-            "Bước 4: Cung cấp thông tin giấy tờ đi lại",
+            "Bước 3: Cung cấp thông tin giấy tờ đi lại",
             on_back=self.go_back
         ))
 
@@ -211,8 +218,7 @@ class PassengerInfoPage(QWidget):
 
         name_col = QVBoxLayout(); name_col.setSpacing(6)
         name_col.addWidget(_field_label("HỌ VÀ TÊN (NHƯ HỘ CHIẾU)"))
-        self._name = _input("NGUYEN VAN A",
-                            default=self.account.get("full_name","").upper())
+        self._name = _input("Ví dụ: NGUYEN VAN A", default=self.account.get("full_name","").upper())
         name_col.addWidget(self._name)
         self._card1._root.addLayout(name_col)
         self._card1._root.addSpacing(14)
@@ -233,12 +239,20 @@ class PassengerInfoPage(QWidget):
         self._card1._root.addLayout(row1)
         self._card1._root.addSpacing(14)
 
-        # Nationality
+        # Row: Nationality + Passport/CCCD
         nat_col = QVBoxLayout(); nat_col.setSpacing(6)
         nat_col.addWidget(_field_label("QUỐC TỊCH"))
         self._nationality = _input("Việt Nam", "Việt Nam")
         nat_col.addWidget(self._nationality)
-        self._card1._root.addLayout(nat_col)
+
+        pass_col = QVBoxLayout(); pass_col.setSpacing(6)
+        pass_col.addWidget(_field_label("CCCD / HỘ CHIẾU"))
+        self._passport = _input("Nhập số CCCD/Hộ chiếu")
+        pass_col.addWidget(self._passport)
+
+        row_nat_pass = QHBoxLayout(); row_nat_pass.setSpacing(16)
+        row_nat_pass.addLayout(nat_col); row_nat_pass.addLayout(pass_col)
+        self._card1._root.addLayout(row_nat_pass)
 
         left.addWidget(self._card1)
 
@@ -247,8 +261,7 @@ class PassengerInfoPage(QWidget):
 
         email_col = QVBoxLayout(); email_col.setSpacing(6)
         email_col.addWidget(_field_label("ĐỊA CHỈ EMAIL"))
-        self._email = _input("example@email.com",
-                             default=self.account.get("email",""))
+        self._email = _input("example@email.com", default=self.account.get("email",""))
         email_col.addWidget(self._email)
 
         phone_col = QVBoxLayout(); phone_col.setSpacing(6)
@@ -278,13 +291,25 @@ class PassengerInfoPage(QWidget):
         root.addLayout(cols)
 
     def _on_proceed(self):
+        name = self._name.text().strip()
+        passport = self._passport.text().strip()
+        phone = self._phone.text().strip()
+
+        # Validation cơ bản
+        if not name or not passport or not phone:
+            self._summary.err_lbl.setText("Vui lòng điền đủ Tên, CCCD và SĐT!")
+            return
+            
+        self._summary.err_lbl.setText("")
+
         pax = dict(
-            name=self._name.text() or "NGUYEN VAN A",
+            name=name,
             dob=self._dob.text() or "DD/MM/YYYY",
             gender=self._gender.currentText(),
             nationality=self._nationality.text() or "Việt Nam",
+            passport=passport,
             email=self._email.text(),
-            phone=self._phone.text(),
+            phone=phone,
         )
         self.ctx["passenger"] = pax
         self.proceed.emit(self.ctx)
