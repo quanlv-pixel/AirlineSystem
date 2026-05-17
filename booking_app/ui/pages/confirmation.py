@@ -12,7 +12,7 @@ from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QPushButton, QFrame, QScrollArea
 )
-from booking_shared import (lbl, h_sep, card_style, red_btn, page_header,
+from booking_app.ui.pages.booking_shared import (lbl, h_sep, card_style, red_btn, page_header,
                              NavBar, C_RED, C_DARK, C_WHITE, C_BG,
                              C_BORDER, C_TEXT, C_MID, C_GRAY, C_LGRAY,
                              C_GREEN, C_BLUE, C_ORANGE)

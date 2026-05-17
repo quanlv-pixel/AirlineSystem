@@ -3,7 +3,7 @@ from PySide6.QtWidgets import QApplication
 
 from booking_app.ui.dialogs.cus_login import LoginWindow
 from booking_app.ui.dialogs.cus_register import RegisterWindow
-from booking_app.ui.booking_window import BookingWindow
+from booking_app.ui.booking_window_origin import BookingWindow
 
 class AppController:
     def __init__(self):
