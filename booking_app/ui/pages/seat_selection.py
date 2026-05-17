@@ -363,8 +363,11 @@ class SeatMapPage(QWidget):
         self.setStyleSheet(f"background:{C_BG};")
 
         # ── Tự động gọi DB lấy ghế đã đặt ─────────────────────────────────────
-        flight_info = self.ctx.get("flight", {})
-        flight_id = flight_info.get("flight_id") or flight_info.get("fid") or 1
+        flight_info = self.ctx.get("flight") if self.ctx else None
+        if flight_info:
+            flight_id = flight_info.get("flight_id") or flight_info.get("fid") or 1
+        else:
+            flight_id = 1  # Giá trị mặc định khi chưa chọn chuyến bay
         occupied_seats = self._get_occupied_seats(flight_id)
 
         root = QVBoxLayout(self)
