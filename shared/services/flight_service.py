@@ -226,3 +226,55 @@ def get_average_load_factor() -> int:
         return 0
 
     return round(result)
+
+def sync_mock_flight_to_db(flight_id: int) -> bool:
+    """
+    Checks if a flight exists in the database. If not, fetches it from
+    the aviation API (mock) and inserts it into the local database.
+    """
+    from shared.api.aviation_api import fetch_live_flights
+
+    flight = get_flight_by_id(flight_id)
+    if flight:
+        return True
+
+    # Flight not in DB, try to find it in mock API
+    all_mock = fetch_live_flights()
+    mock_flight = next((f for f in all_mock if f["flight_id"] == flight_id), None)
+
+    if not mock_flight:
+        return False
+
+    conn = connect_db()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            INSERT INTO flights (
+                flight_id, flight_number, airline_name, departure, destination,
+                departure_time, arrival_time, available_seats, total_seats,
+                ticket_price, status, aircraft, gate, terminal
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            mock_flight["flight_id"],
+            mock_flight["flight_number"],
+            mock_flight["airline_name"],
+            mock_flight["departure"],
+            mock_flight["destination"],
+            mock_flight["departure_time"],
+            mock_flight["arrival_time"],
+            mock_flight["available_seats"],
+            mock_flight["total_seats"],
+            mock_flight["ticket_price"],
+            mock_flight["status"],
+            mock_flight["aircraft"],
+            mock_flight["gate"],
+            mock_flight["terminal"]
+        ))
+        conn.commit()
+        return True
+    except Exception as e:
+        print(f"[flight_service] Error syncing flight {flight_id}: {e}")
+        return False
+    finally:
+        conn.close()

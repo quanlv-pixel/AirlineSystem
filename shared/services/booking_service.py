@@ -1,3 +1,5 @@
+import sqlite3
+import sys
 from database.db import get_connection
 from shared.models.booking import Booking
 
@@ -18,7 +20,6 @@ def row_to_booking(row):
 
 def get_all_bookings():
     conn = get_connection()
-    conn.row_factory = sqlite3.Row if "sqlite3" in sys.modules else None # Row factory might be set in get_connection
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM bookings ORDER BY booking_date DESC")
     rows = cursor.fetchall()

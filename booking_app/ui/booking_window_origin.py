@@ -14,7 +14,7 @@ from PySide6.QtWidgets import (
 )
 
 # Centralized Services
-from shared.services.flight_service import get_all_flights
+from shared.services.flight_service import get_all_flights, sync_mock_flight_to_db
 from shared.services.passenger_service import create_passenger
 from shared.services.booking_service import create_booking
 from shared.services.seat_service import reserve_seat
@@ -268,10 +268,22 @@ class BookingWindow(QMainWindow):
             pnr = self.ctx.get("pnr") or ("JJ" + "".join(random.choices(string.ascii_uppercase + string.digits, k=4)))
             self.ctx["pnr"] = pnr
 
+            # 0. Sync flight if mock
+            fid = flight.get("fid", 1)
+            if not sync_mock_flight_to_db(fid):
+                print(f"[Sync Error] Could not sync flight {fid} to database.")
+                return False
+
             # 1. Create Passenger via service
+            # Ensure date_of_birth is present (NOT NULL in DB)
+            dob = pax_data.get("dob")
+            if not dob or dob == "DD/MM/YYYY":
+                dob = "1990-01-01" # Default placeholder
+
             success, msg = create_passenger(
                 full_name=pax_data.get("name"),
                 gender=pax_data.get("gender", "N/A"),
+                date_of_birth=dob,
                 phone=pax_data.get("phone"),
                 passport_number=pax_data.get("passport"),
                 email=pax_data.get("email"),
@@ -280,8 +292,7 @@ class BookingWindow(QMainWindow):
             if not success:
                 print(f"[Service Error] create_passenger: {msg}"); return False
             
-            # Need to get the passenger ID - usually create_passenger should return it
-            # But the provided service doesn't return ID, so we search by passport
+            # Need to get the passenger ID
             from shared.services.passenger_service import search_passengers
             pax_results = search_passengers(pax_data.get("passport"))
             if not pax_results: return False
@@ -294,7 +305,7 @@ class BookingWindow(QMainWindow):
                 success, msg, booking_id = create_booking(
                     booking_reference=pnr,
                     passenger_id=passenger_id,
-                    flight_id=flight.get("fid", 1),
+                    flight_id=fid,
                     seat_number=seat_label,
                     total_amount=self.ctx.get("total", 0),
                     payment_status="Paid",
@@ -308,7 +319,7 @@ class BookingWindow(QMainWindow):
                 
                 # Reserve seat in seats table
                 success, msg = reserve_seat(
-                    flight_id=flight.get("fid", 1),
+                    flight_id=fid,
                     seat_number=seat_label,
                     passenger_id=passenger_id
                 )
