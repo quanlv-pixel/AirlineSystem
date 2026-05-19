@@ -1,7 +1,6 @@
 from __future__ import annotations
 import sys
 import os
-import sqlite3
 from datetime import datetime
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor, QPainter, QBrush, QPen, QPainterPath
@@ -14,10 +13,7 @@ from booking_app.ui.pages.booking_shared import (lbl, h_sep, card_style,
                              C_BORDER, C_TEXT, C_MID, C_GRAY, C_LGRAY,
                              C_GREEN, C_BLUE, C_ORANGE)
 
-# Đường dẫn an toàn tới Database
-DB_PATH = os.path.join(os.path.dirname(__file__), "database", "airline.db")
-if not os.path.exists(DB_PATH):
-    DB_PATH = os.path.join(os.path.dirname(__file__), "airline.db")
+from shared.services.booking_service import get_booking_history_by_user
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -205,42 +201,12 @@ class HistoryPage(QWidget):
         self.refresh()
 
     def refresh(self, current_account: dict | None = None):
-        """Hàm đồng bộ và tải lại toàn bộ dữ liệu từ Database thực tế"""
+        """Hàm đồng bộ và tải lại toàn bộ dữ liệu từ Service Layer"""
         if current_account:
             self.account = current_account
             
-        acc_id = self.account.get("account_id", 1)
-        self.all_bookings = []
-        
-        try:
-            conn = sqlite3.connect(DB_PATH)
-            conn.row_factory = sqlite3.Row
-            cursor = conn.cursor()
-            
-            # Truy vấn kết hợp lấy chi tiết lịch sử bay của Tài khoản đăng nhập
-            query = """
-                SELECT b.booking_id, b.booking_date, b.total_amount, b.status,
-                       f.flight_code, f.departure, f.destination, f.departure_time, f.arrival_time,
-                       (SELECT group_concat(seat_number, ', ') FROM tickets WHERE booking_id = b.booking_id) as seats
-                FROM bookings b
-                JOIN flights f ON b.flight_id = f.flight_id
-                WHERE b.account_id = ?
-                ORDER BY b.booking_id DESC
-            """
-            cursor.execute(query, (acc_id,))
-            rows = cursor.fetchall()
-            
-            for r in rows:
-                self.all_bookings.append(dict(r))
-                
-            conn.close()
-        except Exception as e:
-            print(f"[Database Error] Lỗi tải lịch sử đặt vé: {e}")
-            # Dữ liệu mẫu (Fallback) nếu DB trống hoặc cấu trúc chưa hoàn thiện
-            self.all_bookings = [
-                {"booking_id": 1024, "booking_date": "2026-05-15", "total_amount": 177, "status": "confirmed", "flight_code": "JJ101", "departure": "SGN", "destination": "HAN", "departure_time": "08:00", "seats": "4B, 5B"},
-                {"booking_id": 1012, "booking_date": "2026-05-10", "total_amount": 120, "status": "pending", "flight_code": "JJ204", "departure": "DAD", "destination": "SGN", "departure_time": "14:20", "seats": "12A"},
-            ]
+        username = self.account.get("username", "guest")
+        self.all_bookings = get_booking_history_by_user(username)
 
         # Cập nhật Widgets thống kê đỉnh đầu
         self._update_stats_header()
@@ -255,9 +221,9 @@ class HistoryPage(QWidget):
             if item.widget():
                 item.widget().deleteLater()
                 
-        total_trips = len([b for b in self.all_bookings if b.get("status") in ("confirmed", "completed")])
-        total_spent = sum(b.get("total_amount", 0) for b in self.all_bookings if b.get("status") in ("confirmed", "completed"))
-        pending_pay = len([b for b in self.all_bookings if b.get("status") == "pending"])
+        total_trips = len([b for b in self.all_bookings if str(b.get("status")).lower() in ("confirmed", "completed", "paid")])
+        total_spent = sum(b.get("total_amount", 0) for b in self.all_bookings if str(b.get("status")).lower() in ("confirmed", "completed", "paid"))
+        pending_pay = len([b for b in self.all_bookings if str(b.get("status")).lower() == "pending"])
         
         self.stats_layout.addWidget(StatsCard("Chuyến bay thành công", f"{total_trips} chuyến", "✈", C_GREEN))
         self.stats_layout.addWidget(StatsCard("Tổng tiền tích lũy", f"${total_spent}", "🪪", C_RED))
@@ -280,8 +246,9 @@ class HistoryPage(QWidget):
         """Hành động lọc danh sách và tìm kiếm text song song"""
         # Xóa toàn bộ các card cũ ra khỏi Layout (Trừ nhãn empty_lbl)
         for i in reversed(range(self.list_lay.count())):
-            w = self.list_lay.itemAt(i).widget()
-            if w and w != self.empty_lbl:
+            item = self.list_lay.itemAt(i)
+            if item and item.widget() and item.widget() != self.empty_lbl:
+                w = item.widget()
                 w.setParent(None)
                 w.deleteLater()
                 
@@ -292,7 +259,7 @@ class HistoryPage(QWidget):
             status = str(b.get("status", "pending")).lower()
             
             # Khớp điều kiện bộ lọc nút bấm trước
-            if self.current_filter == "confirmed" and status not in ("confirmed", "completed"):
+            if self.current_filter == "confirmed" and status not in ("confirmed", "completed", "paid"):
                 continue
             if self.current_filter == "pending" and status != "pending":
                 continue
@@ -328,7 +295,7 @@ if __name__ == "__main__":
     app.setStyle("Fusion")
     
     # Tạo Tk ảo của khách hàng đăng nhập thử nghiệm
-    test_account = {"account_id": 1, "full_name": "Lê Văn Quân", "email": "quanle@gmail.com"}
+    test_account = {"account_id": 1, "full_name": "Lê Văn Quân", "username": "quanlv", "email": "quanle@gmail.com"}
     
     window = QWidget()
     window.setWindowTitle("JetJet Air — Kiểm tra Lịch sử đặt chỗ")

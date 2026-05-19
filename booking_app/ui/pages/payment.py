@@ -44,13 +44,29 @@ class CreditCardPreview(QWidget):
         f.setPointSize(14); p.setFont(f); p.drawText(20, h-40, " ".join([self._number[i:i+4] for i in range(0,16,4)]).ljust(19, "*"))
         f.setPointSize(9); p.setFont(f); p.drawText(20, h-15, self._name or "FULL NAME"); p.drawText(w-70, h-15, self._expiry or "MM/YY")
 
+class QRCodeWidget(QWidget):
+    def __init__(self, data: str, size: int = 200, parent=None):
+        super().__init__(parent); self.setFixedSize(size, size); self.data = data or "JETJET-PAY"
+    def paintEvent(self, _):
+        p = QPainter(self); w = self.width(); res = 15; unit = w / res
+        hash_val = int(hashlib.md5(self.data.encode()).hexdigest(), 16)
+        p.fillRect(0, 0, w, w, Qt.white); p.setPen(Qt.NoPen); p.setBrush(Qt.black)
+        for i in range(res):
+            for j in range(res):
+                if (i < 3 and j < 3) or (i > res-4 and j < 3) or (i < 3 and j > res-4): p.drawRect(i*unit, j*unit, unit, unit)
+                elif (hash_val >> (i*res + j)) & 1: p.drawRect(i*unit, j*unit, unit, unit)
+
 class SSLDialog(QDialog):
     payment_complete = Signal()
     def __init__(self, total, parent=None):
-        super().__init__(parent); self.setWindowFlags(Qt.FramelessWindowHint); self.setFixedSize(300, 150)
-        v = QVBoxLayout(self); v.addWidget(lbl("🔒 ĐANG XỬ LÝ THANH TOÁN...", 14, 700, C_DARK)); v.addWidget(lbl(f"Số tiền: ${total}", 12, 500, C_GRAY))
-        self._bar = QProgressBar(); self._bar.setRange(0, 0); v.addWidget(self._bar)
-        QTimer.singleShot(2000, self._finish)
+        super().__init__(parent); self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog); self.setFixedSize(320, 180)
+        self.setStyleSheet(f"background:{C_WHITE}; border:1px solid {C_BORDER}; border-radius:12px;")
+        v = QVBoxLayout(self); v.setContentsMargins(30, 30, 30, 30); v.setSpacing(15)
+        v.addWidget(lbl("🔒 ĐANG XỬ LÝ THANH TOÁN...", 13, 800, C_DARK), 0, Qt.AlignCenter)
+        v.addWidget(lbl(f"Đang kết nối tới cổng thanh toán SSL bảo mật cho số tiền ${total}...", 11, 400, C_GRAY, 1.0), 0, Qt.AlignCenter)
+        self._bar = QProgressBar(); self._bar.setRange(0, 0); self._bar.setFixedHeight(6)
+        self._bar.setStyleSheet(f"QProgressBar {{ background:{C_LGRAY}; border:none; border-radius:3px; }} QProgressBar::chunk {{ background:{C_RED}; border-radius:3px; }}")
+        v.addWidget(self._bar); QTimer.singleShot(2500, self._finish)
     def _finish(self): self.payment_complete.emit(); self.accept()
 
 class OrderSummary(QWidget):
@@ -90,19 +106,62 @@ class PaymentPage(QWidget):
         super().__init__(parent); self.ctx = ctx or {}; self.setStyleSheet(f"background:{C_BG};")
         root = QVBoxLayout(self); root.setContentsMargins(28, 24, 28, 28); root.setSpacing(20)
         root.addLayout(page_header("Thanh toán An toàn", "GIAO DỊCH BẢO MẬT", on_back=self.go_back))
+        
         body = QHBoxLayout(); body.setSpacing(20)
-        left = QVBoxLayout(); left_card = QWidget(); left_card.setStyleSheet(card_style(20)); lc = QVBoxLayout(left_card)
-        self._preview = CreditCardPreview(); lc.addWidget(self._preview, 0, Qt.AlignCenter)
-        self._f_num = QLineEdit(); self._f_num.setPlaceholderText("SỐ THẺ"); self._f_num.textChanged.connect(self._preview.set_number); lc.addWidget(self._f_num)
-        self._f_name = QLineEdit(); self._f_name.setPlaceholderText("TÊN CHỦ THẺ"); self._f_name.textChanged.connect(self._preview.set_name); lc.addWidget(self._f_name)
-        left.addWidget(left_card); left.addStretch(); body.addLayout(left, 62)
+        left = QVBoxLayout(); left.setSpacing(15)
+        
+        # Method Tabs
+        tab_lay = QHBoxLayout(); tab_lay.setSpacing(10)
+        self.btn_card = QPushButton("Thẻ Tín Dụng"); self.btn_qr = QPushButton("Mã QR (VNPay/Momo)")
+        for b in [self.btn_card, self.btn_qr]:
+            b.setCheckable(True); b.setFixedHeight(45); b.setCursor(Qt.PointingHandCursor)
+        self.btn_card.setChecked(True)
+        tab_lay.addWidget(self.btn_card, 1); tab_lay.addWidget(self.btn_qr, 1)
+        left.addLayout(tab_lay)
+        
+        # Payment Forms Stack
+        from PySide6.QtWidgets import QStackedWidget
+        self.method_stack = QStackedWidget()
+        
+        # Card Form
+        card_w = QWidget(); card_w.setStyleSheet(card_style(20)); cw_lay = QVBoxLayout(card_w); cw_lay.setSpacing(15)
+        self._preview = CreditCardPreview(); cw_lay.addWidget(self._preview, 0, Qt.AlignCenter)
+        self._f_num = QLineEdit(); self._f_num.setPlaceholderText("SỐ THẺ"); self._f_num.textChanged.connect(self._preview.set_number); cw_lay.addWidget(self._f_num)
+        self._f_name = QLineEdit(); self._f_name.setPlaceholderText("TÊN CHỦ THẺ"); self._f_name.textChanged.connect(self._preview.set_name); cw_lay.addWidget(self._f_name)
+        self.method_stack.addWidget(card_w)
+        
+        # QR Form
+        qr_w = QWidget(); qr_w.setStyleSheet(card_style(20)); qw_lay = QVBoxLayout(qr_w); qw_lay.setAlignment(Qt.AlignCenter)
+        qw_lay.addWidget(lbl("QUÉT MÃ ĐỂ THANH TOÁN", 14, 800, C_DARK))
+        self.qr_widget = QRCodeWidget("JETJET-ORDER-12345"); qw_lay.addWidget(self.qr_widget)
+        qw_lay.addWidget(lbl("Sử dụng ứng dụng ngân hàng hoặc ví điện tử để quét", 11, 400, C_GRAY))
+        self.method_stack.addWidget(qr_w)
+        
+        left.addWidget(self.method_stack); left.addStretch()
+        body.addLayout(left, 62)
+        
         self._order = OrderSummary(); self._order.pay_clicked.connect(self._on_pay); body.addWidget(self._order, 38)
         root.addLayout(body)
+        
+        self.btn_card.clicked.connect(lambda: self._switch_method(0))
+        self.btn_qr.clicked.connect(lambda: self._switch_method(1))
+        self._switch_method(0)
+
+    def _switch_method(self, idx):
+        self.method_stack.setCurrentIndex(idx)
+        self.btn_card.setChecked(idx == 0); self.btn_qr.setChecked(idx == 1)
+        st = "background:{}; color:{}; border:none; border-radius:8px; font-weight:700;"
+        self.btn_card.setStyleSheet(st.format(C_RED if idx==0 else C_WHITE, C_WHITE if idx==0 else C_MID))
+        self.btn_qr.setStyleSheet(st.format(C_RED if idx==1 else C_WHITE, C_WHITE if idx==1 else C_MID))
+
     def update_page(self, ctx: dict | None = None):
         if ctx: self.ctx = ctx
         self._order.update_data(self.ctx)
+        self.qr_widget.data = f"JETJET-{self.ctx.get('pnr', 'PAY')}-{self.ctx.get('total', 0)}"
+        self.qr_widget.update()
+
     def _on_pay(self):
-        total = self.ctx.get("base_price",0) + self.ctx.get("seat_fee",0) + 57
+        total = self.ctx.get("total", 0)
         dlg = SSLDialog(total, self); dlg.payment_complete.connect(lambda: self.payment_complete.emit(self.ctx)); dlg.exec()
 
 if __name__ == "__main__":

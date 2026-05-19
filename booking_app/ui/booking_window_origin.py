@@ -38,6 +38,12 @@ from booking_app.ui.pages.confirmation     import ConfirmPage
 from booking_app.ui.pages.payment          import PaymentPage
 from booking_app.ui.pages.ticket           import TicketPage
 
+# New feature pages
+from booking_app.ui.history                import HistoryPage
+from booking_app.ui.promotion              import PromotionPage
+from booking_app.ui.members                import MembersPage
+from booking_app.ui.cur_mem                import CurrentMemberPage
+
 AIRPORTS = ["SGN (TP.HCM)", "HAN (Hà Nội)", "DAD (Đà Nẵng)",
             "CXR (Nha Trang)", "PQC (Phú Quốc)"]
 
@@ -174,9 +180,12 @@ class BookingWindow(QMainWindow):
 
     def _init_all_pages(self):
         self.step1_search    = FlightsPage()
-        self.page_history    = PlaceholderPage("📜", "Lịch Sử")
-        self.page_promo      = PlaceholderPage("🎁", "Khuyến Mãi")
-        self.page_info       = PlaceholderPage("◎",  "Thông Tin")
+        self.page_history    = HistoryPage(account=self.account)
+        self.page_promo      = PromotionPage()
+        self.page_info       = QWidget() # Blank QWidget placeholder for Info tab
+        
+        self.page_members    = MembersPage()
+        self.page_cur_mem    = CurrentMemberPage()
         
         self.step2_detail    = FlightDetailPage(None)
         self.step3_passenger = PassengerInfoPage(self.ctx)
@@ -185,11 +194,17 @@ class BookingWindow(QMainWindow):
         self.step7_payment   = PaymentPage(self.ctx)
         self.step8_ticket    = TicketPage(self.ctx)
 
+        # Add pages to stack. Indices:
+        # 0: Search, 1: History, 2: Promotion, 3: Info
+        # 4: Detail, 5: Passenger, 6: Seats, 7: Confirm, 8: Payment, 9: Ticket
+        # 10: Members, 11: Current Member
         for page in [self.step1_search, self.page_history, self.page_promo, self.page_info,
                      self.step2_detail, self.step3_passenger, self.step4_seats,
-                     self.step6_confirm, self.step7_payment, self.step8_ticket]:
+                     self.step6_confirm, self.step7_payment, self.step8_ticket,
+                     self.page_members, self.page_cur_mem]:
             self.stack.addWidget(page)
 
+        # Signal connections for booking flow
         self.step1_search.flight_selected.connect(self._to_step2_detail)
         self.step2_detail.proceed.connect(self._to_step3_passenger)
         self.step2_detail.go_back.connect(lambda: self.stack.setCurrentIndex(0))
@@ -201,6 +216,10 @@ class BookingWindow(QMainWindow):
         self.step6_confirm.go_back.connect(lambda: self.stack.setCurrentIndex(6))
         self.step7_payment.payment_complete.connect(self._to_step8_ticket)
         self.step7_payment.go_back.connect(lambda: self.stack.setCurrentIndex(7))
+        
+        # New feature connections
+        self.page_promo.activate_member_clicked.connect(lambda: self.stack.setCurrentIndex(10))
+        self.page_members.register_success.connect(lambda: self.stack.setCurrentIndex(11))
         
         if hasattr(self.step8_ticket, 'go_home'):
             self.step8_ticket.go_home.connect(self._reset_to_home)
@@ -236,6 +255,13 @@ class BookingWindow(QMainWindow):
 
     def _to_step8_ticket(self, final_ctx: dict):
         self.ctx.update(final_ctx)
+        
+        # Populate final boarding info
+        self.ctx["pnr"] = self.ctx.get("pnr") or ("JJ" + "".join(random.choices(string.ascii_uppercase + string.digits, k=4)))
+        self.ctx["gate"] = random.choice(["B21", "B22", "A10", "A12", "C05"])
+        self.ctx["terminal"] = "Nhà ga T1"
+        self.ctx["zone"] = random.choice(["Khu A", "Khu B", "Khu C"])
+        
         if self._save_booking_to_db():
             self._call_update_and_switch(self.step8_ticket, 9)
         else:

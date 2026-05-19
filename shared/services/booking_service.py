@@ -78,3 +78,32 @@ def get_total_revenue():
     result = cursor.fetchone()[0]
     conn.close()
     return result if result else 0
+
+def get_booking_history_by_user(username: str):
+    """
+    Fetches booking history for a specific user.
+    Joins with flights to get route and time information.
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+    # Based on init_db.py schema: 
+    # bookings table has: booking_id, booking_date, total_amount, booking_status, created_by, seat_number
+    # flights table has: flight_id, flight_number, departure, destination, departure_time, arrival_time
+    query = """
+        SELECT b.booking_id, b.booking_date, b.total_amount, b.booking_status as status,
+               f.flight_number as flight_code, f.departure, f.destination, f.departure_time, f.arrival_time,
+               b.seat_number as seats
+        FROM bookings b
+        JOIN flights f ON b.flight_id = f.flight_id
+        WHERE b.created_by = ?
+        ORDER BY b.booking_id DESC
+    """
+    try:
+        cursor.execute(query, (username,))
+        rows = cursor.fetchall()
+        return [dict(row) for row in rows]
+    except Exception as e:
+        print(f"[Service Error] get_booking_history_by_user: {e}")
+        return []
+    finally:
+        conn.close()
