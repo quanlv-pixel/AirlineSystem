@@ -21,8 +21,9 @@ def _row_to_account(row: tuple) -> Account:
         password_hash=row[3],
         full_name=row[4],
         role=row[5],
-        created_at=row[6],
-        last_login=row[7],
+        phone=row[6],
+        created_at=row[7],
+        last_login=row[8],
     )
 
 
@@ -38,7 +39,7 @@ def login(identifier: str, password: str) -> Account | None:
         cursor.execute(
             """
             SELECT account_id, username, email, password_hash,
-                   full_name, role, created_at, last_login
+                   full_name, role, phone, created_at, last_login
             FROM accounts
             WHERE (email = ? OR username = ?) AND password_hash = ?
             """,
@@ -113,7 +114,7 @@ def get_all_accounts() -> list[Account]:
     cursor.execute(
         """
         SELECT account_id, username, email, password_hash,
-               full_name, role, created_at, last_login
+               full_name, role, phone, created_at, last_login
         FROM accounts
         ORDER BY account_id
         """
@@ -129,7 +130,7 @@ def get_account_by_id(account_id: int) -> Account | None:
     cursor.execute(
         """
         SELECT account_id, username, email, password_hash,
-               full_name, role, created_at, last_login
+               full_name, role, phone, created_at, last_login
         FROM accounts WHERE account_id = ?
         """,
         (account_id,),
@@ -143,6 +144,8 @@ def update_account(
     account_id: int,
     full_name: str = None,
     role: str = None,
+    email: str = None,
+    phone: str = None,
 ) -> bool:
     conn = connect_db()
     cursor = conn.cursor()
@@ -156,6 +159,16 @@ def update_account(
             cursor.execute(
                 "UPDATE accounts SET role = ? WHERE account_id = ?",
                 (role, account_id),
+            )
+        if email is not None:
+            cursor.execute(
+                "UPDATE accounts SET email = ? WHERE account_id = ?",
+                (email, account_id),
+            )
+        if phone is not None:
+            cursor.execute(
+                "UPDATE accounts SET phone = ? WHERE account_id = ?",
+                (phone, account_id),
             )
         conn.commit()
         return True

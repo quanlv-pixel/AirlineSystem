@@ -18,7 +18,11 @@ from PySide6.QtWidgets import (
     QFrame,
     QScrollArea,
     QComboBox,
+    QLineEdit,
+    QMessageBox,
 )
+
+from shared.services.account_service import update_account
 
 # ─────────────────────────────────────────────
 # COLORS
@@ -304,6 +308,7 @@ class SettingsPage(QWidget):
     def __init__(self, account=None):
 
         super().__init__()
+        self.account = account
 
         self.setStyleSheet(f"""
             background: {C_BG};
@@ -379,6 +384,8 @@ class SettingsPage(QWidget):
             }}
         """)
 
+        save_btn.clicked.connect(self.save_profile)
+
         header.addLayout(titles)
         header.addStretch()
         header.addWidget(save_btn)
@@ -409,124 +416,58 @@ class SettingsPage(QWidget):
         # LEFT
         left = QVBoxLayout()
 
+        # ADMIN PROFILE SECTION
+        admin_card = QWidget()
+        admin_card.setStyleSheet(card_style())
+        al = QVBoxLayout(admin_card)
+        al.setContentsMargins(22, 20, 22, 20)
+        al.setSpacing(18)
+
+        al.addWidget(label("ADMIN PROFILE", 10, 700, C_GRAY))
+
+        # Full Name Input
+        fn_lbl = label("Full Name", 13, 600)
+        self.name_input = QLineEdit()
+        self.name_input.setText(getattr(self.account, "full_name", "") or "")
+        self.name_input.setStyleSheet(f"border: 1px solid {C_BORDER}; border-radius: 8px; padding: 8px; background: {C_SOFT};")
+        al.addWidget(fn_lbl)
+        al.addWidget(self.name_input)
+
+        # Email Input
+        em_lbl = label("Email", 13, 600)
+        self.email_input = QLineEdit()
+        self.email_input.setText(getattr(self.account, "email", "") or "")
+        self.email_input.setStyleSheet(f"border: 1px solid {C_BORDER}; border-radius: 8px; padding: 8px; background: {C_SOFT};")
+        al.addWidget(em_lbl)
+        al.addWidget(self.email_input)
+
+        # Phone Input
+        ph_lbl = label("Phone", 13, 600)
+        self.phone_input = QLineEdit()
+        self.phone_input.setText(getattr(self.account, "phone", "") or "")
+        self.phone_input.setStyleSheet(f"border: 1px solid {C_BORDER}; border-radius: 8px; padding: 8px; background: {C_SOFT};")
+        al.addWidget(ph_lbl)
+        al.addWidget(self.phone_input)
+
+        left.addWidget(admin_card)
+
+        # INTERFACE SETTINGS (Only Appearance)
         interface_card = QWidget()
-
         interface_card.setStyleSheet(card_style())
-
         il = QVBoxLayout(interface_card)
-
         il.setContentsMargins(22, 20, 22, 20)
-
         il.setSpacing(18)
-
-        il.addWidget(
-            label("INTERFACE SETTINGS", 10, 700, C_GRAY)
-        )
-
-        # Language
-        lang_row = QHBoxLayout()
-
-        lang_row.addWidget(label("🌐", 18))
-        lang_row.addWidget(label("Language", 14, 600))
-
-        lang_row.addStretch()
-
-        combo = QComboBox()
-
-        combo.addItems([
-            "Vietnamese",
-            "English",
-            "日本語",
-            "한국어"
-        ])
-
-        combo.setFixedSize(180, 38)
-
-        combo.setStyleSheet(f"""
-            QComboBox {{
-                background: {C_SOFT};
-                border: 1px solid {C_BORDER};
-                border-radius: 10px;
-                padding-left: 12px;
-                font-size: 13px;
-            }}
-        """)
-
-        lang_row.addWidget(combo)
-
-        il.addLayout(lang_row)
-
-        il.addWidget(hline())
+        il.addWidget(label("INTERFACE SETTINGS", 10, 700, C_GRAY))
 
         # Appearance
         appearance_row = QHBoxLayout()
-
         appearance_row.addWidget(label("☀", 18))
         appearance_row.addWidget(label("Appearance", 14, 600))
-
         appearance_row.addStretch()
-
-        appearance_row.addWidget(
-            AppearancePicker()
-        )
-
+        appearance_row.addWidget(AppearancePicker())
         il.addLayout(appearance_row)
 
         left.addWidget(interface_card)
-
-        # SECURITY
-        sec_card = QWidget()
-
-        sec_card.setStyleSheet(card_style())
-
-        sl = QVBoxLayout(sec_card)
-
-        sl.setContentsMargins(22, 20, 22, 20)
-
-        sl.setSpacing(0)
-
-        sl.addWidget(
-            label("SECURITY & ACCESS", 10, 700, C_GRAY)
-        )
-
-        sl.addSpacing(10)
-
-        rows = [
-            (
-                "🔑",
-                "Cloud Flight Key",
-                "Auto rotating security",
-                True
-            ),
-            (
-                "🔔",
-                "Push Notifications",
-                "Realtime operation alerts",
-                True
-            ),
-            (
-                "📱",
-                "Biometric Access",
-                "FaceID / Fingerprint",
-                False
-            ),
-        ]
-
-        for icon, title, subtitle, checked in rows:
-
-            sl.addWidget(hline())
-
-            sl.addWidget(
-                SettingsRow(
-                    icon,
-                    title,
-                    subtitle,
-                    checked
-                )
-            )
-
-        left.addWidget(sec_card)
-
         left.addStretch()
 
         cols.addLayout(left, 55)
@@ -597,3 +538,28 @@ class SettingsPage(QWidget):
         footer.addWidget(right_txt)
 
         root.addLayout(footer)
+
+    def save_profile(self):
+        if not self.account:
+            QMessageBox.warning(self, "Lỗi", "Không tìm thấy thông tin tài khoản.")
+            return
+
+        full_name = self.name_input.text().strip()
+        email = self.email_input.text().strip()
+        phone = self.phone_input.text().strip()
+
+        success = update_account(
+            account_id=self.account.account_id,
+            full_name=full_name,
+            email=email,
+            phone=phone
+        )
+
+        if success:
+            QMessageBox.information(self, "Thành công", "Cập nhật thông tin thành công!")
+            # Update the account object locally
+            self.account.full_name = full_name
+            self.account.email = email
+            self.account.phone = phone
+        else:
+            QMessageBox.warning(self, "Lỗi", "Đã có lỗi xảy ra khi lưu thông tin.")

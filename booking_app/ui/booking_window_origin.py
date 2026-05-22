@@ -306,7 +306,7 @@ class BookingWindow(QMainWindow):
             if not dob or dob == "DD/MM/YYYY":
                 dob = "1990-01-01" # Default placeholder
 
-            success, msg = create_passenger(
+            success, msg, passenger_id = create_passenger(
                 full_name=pax_data.get("name"),
                 gender=pax_data.get("gender", "N/A"),
                 date_of_birth=dob,
@@ -315,21 +315,18 @@ class BookingWindow(QMainWindow):
                 email=pax_data.get("email"),
                 nationality=pax_data.get("nationality", "Vietnam")
             )
-            if not success:
+            if not success or not passenger_id:
                 print(f"[Service Error] create_passenger: {msg}"); return False
-            
-            # Need to get the passenger ID
-            from shared.services.passenger_service import search_passengers
-            pax_results = search_passengers(pax_data.get("passport"))
-            if not pax_results: return False
-            passenger_id = pax_results[0].passenger_id
 
             # 2. Bookings & Seat Reservations via services
             first_booking_id = None
-            for seat_label in self.ctx.get("seat_labels", []):
+            for i, seat_label in enumerate(self.ctx.get("seat_labels", [])):
+                # Generate unique PNR per passenger/seat row if multiple
+                unique_pnr = pnr if len(self.ctx.get("seat_labels", [])) == 1 else f"{pnr}-{i+1}"
+                
                 # Create booking record
                 success, msg, booking_id = create_booking(
-                    booking_reference=pnr,
+                    booking_reference=unique_pnr,
                     passenger_id=passenger_id,
                     flight_id=fid,
                     seat_number=seat_label,
@@ -358,7 +355,7 @@ class BookingWindow(QMainWindow):
                     booking_id=first_booking_id,
                     payment_method="Card",
                     amount=self.ctx.get("total", 0),
-                    transaction_id=pnr + "-TX"
+                    transaction_code=pnr + "-TX"
                 )
                 if not success:
                     print(f"[Service Error] create_payment: {msg}")

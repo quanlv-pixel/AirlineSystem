@@ -9,6 +9,7 @@ class Account:
         password_hash: str = None,
         full_name: str = None,
         role: str = "staff",
+        phone: str = None,
         created_at: str = None,
         last_login: str = None,
     ):
@@ -17,7 +18,8 @@ class Account:
         self.email = email
         self.password_hash = password_hash
         self.full_name = full_name
-        self.role = role          
+        self.role = role
+        self.phone = phone
         self.created_at = created_at
         self.last_login = last_login
 

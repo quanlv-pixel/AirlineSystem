@@ -3,8 +3,10 @@ from collections import namedtuple
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QFrame, QLineEdit, QScrollArea, QComboBox,
+    QFrame, QLineEdit, QScrollArea, QComboBox, QFileDialog, QMessageBox, QDialog
 )
+import csv
+from management_app.ui.dialogs.flight_dialog import FlightDialog
 
 from shared.services.flight_service import (
     get_all_flights,
@@ -71,8 +73,10 @@ class _VSep(QFrame):
 # ─────────────────────────────────────────────────────────────────────────────
 class FlightRow(QWidget):
     def __init__(self, code, aircraft, departure, arrival,
-                 percent, status, status_color):
+                 percent, status, status_color, flight=None, edit_callback=None):
         super().__init__()
+        self.flight = flight
+        self.edit_callback = edit_callback
         self.setFixedHeight(72)
         self.setStyleSheet("background: transparent;")
 
@@ -226,9 +230,27 @@ class FlightRow(QWidget):
             border: 1.5px solid {BORDER};
             border-radius: 13px;
         """)
-        action_l.addWidget(action_lbl)
+        
+        action_btn = QPushButton("✎")
+        action_btn.setFixedSize(26, 26)
+        action_btn.setStyleSheet(f"""
+            color: {GRAY_TEXT};
+            font-size: 14px;
+            border: 1.5px solid {BORDER};
+            border-radius: 13px;
+            background: transparent;
+        """)
+        if self.edit_callback and self.flight:
+            action_btn.clicked.connect(lambda: self.edit_callback(self.flight))
+
+        action_l.addWidget(action_btn)
 
         lay.addWidget(action_w, 5)
+
+    def mouseDoubleClickEvent(self, event):
+        if self.edit_callback and self.flight:
+            self.edit_callback(self.flight)
+        super().mouseDoubleClickEvent(event)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -290,6 +312,9 @@ class FlightsPage(QWidget):
             }}
             QPushButton:hover {{ background: #C62828; }}
         """)
+
+        self.add_btn.clicked.connect(self.open_add_dialog)
+        self.export_btn.clicked.connect(self.export_csv)
 
         action_bar.addWidget(self.export_btn)
         action_bar.addWidget(self.add_btn)
@@ -516,13 +541,15 @@ class FlightsPage(QWidget):
             status_color = color_map.get(status, "#16A34A")
 
             row = FlightRow(
-                getattr(flight, "flight_code",        "—"),
+                getattr(flight, "flight_code", getattr(flight, "flight_number", "—")),
                 getattr(flight, "aircraft",            "—"),
                 getattr(flight, "departure",           "—"),
                 getattr(flight, "destination",         "—"),
                 percent,
                 status,
                 status_color,
+                flight=flight,
+                edit_callback=self.open_edit_dialog
             )
             self.rows_layout.addWidget(row)
 
@@ -572,3 +599,37 @@ class FlightsPage(QWidget):
                 ]
 
         self.load_flights(flights)
+
+    def open_add_dialog(self):
+        dialog = FlightDialog(parent=self)
+        if dialog.exec() == QDialog.Accepted:
+            self.load_flights()
+            
+    def open_edit_dialog(self, flight):
+        dialog = FlightDialog(flight=flight, parent=self)
+        if dialog.exec() == QDialog.Accepted:
+            self.load_flights()
+            
+    def export_csv(self):
+        flights = get_all_flights()
+        if not flights:
+            QMessageBox.warning(self, "Trống", "Không có dữ liệu để xuất!")
+            return
+            
+        file_path, _ = QFileDialog.getSaveFileName(self, "Lưu danh sách chuyến bay", "", "CSV Files (*.csv)")
+        if not file_path:
+            return
+            
+        try:
+            with open(file_path, 'w', newline='', encoding='utf-8') as f:
+                writer = csv.writer(f)
+                writer.writerow(["Mã Chuyến", "Hãng", "Sân bay đi", "Sân bay đến", "Giờ đi", "Giờ đến", "Giá vé", "Tổng ghế", "Trạng thái", "Tàu bay"])
+                for fl in flights:
+                    writer.writerow([
+                        fl.flight_number, fl.airline_name, fl.departure, fl.destination,
+                        fl.departure_time, fl.arrival_time, fl.ticket_price,
+                        fl.total_seats, fl.status, fl.aircraft
+                    ])
+            QMessageBox.information(self, "Thành công", f"Đã xuất file CSV thành công:\n{file_path}")
+        except Exception as e:
+            QMessageBox.critical(self, "Lỗi", f"Không thể lưu file: {str(e)}")

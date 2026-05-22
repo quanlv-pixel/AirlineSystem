@@ -38,7 +38,7 @@ def create_passenger(
     email: str,
     nationality: str,
     member_rank: str = "member",
-) -> tuple[bool, str]:
+) -> tuple[bool, str, int | None]:
 
     conn = connect_db()
     cursor = conn.cursor()
@@ -68,10 +68,11 @@ def create_passenger(
         ))
 
         conn.commit()
-        return True, "Passenger created successfully."
+        new_id = cursor.lastrowid
+        return True, "Passenger created successfully.", new_id
 
     except Exception as e:
-        return False, str(e)
+        return False, str(e), None
 
     finally:
         conn.close()

@@ -150,6 +150,25 @@ def reserve_seat(
     cursor = conn.cursor()
 
     try:
+        # Use atomic UPDATE to prevent race conditions
+        cursor.execute("""
+            UPDATE seats
+            SET is_reserved = 1,
+                passenger_id = ?
+            WHERE flight_id = ?
+            AND seat_number = ?
+            AND is_reserved = 0
+        """, (
+            passenger_id,
+            flight_id,
+            seat_number,
+        ))
+
+        if cursor.rowcount > 0:
+            conn.commit()
+            return True, "Seat reserved successfully."
+
+        # If no row updated, either seat doesn't exist, or it is already reserved.
         cursor.execute("""
             SELECT is_reserved
             FROM seats
@@ -163,26 +182,27 @@ def reserve_seat(
         row = cursor.fetchone()
 
         if not row:
-            return False, "Seat not found."
+            # UPSERT logic: If seat not found, insert it as reserved
+            cursor.execute("""
+                INSERT INTO seats (
+                    flight_id,
+                    seat_number,
+                    seat_class,
+                    is_reserved,
+                    passenger_id
+                )
+                VALUES (?, ?, ?, ?, ?)
+            """, (
+                flight_id,
+                seat_number,
+                "Economy", # Default to Economy if not found
+                1,
+                passenger_id,
+            ))
+            conn.commit()
+            return True, "Seat created and reserved successfully."
 
-        if row[0] == 1:
-            return False, "Seat already reserved."
-
-        cursor.execute("""
-            UPDATE seats
-            SET is_reserved = 1,
-                passenger_id = ?
-            WHERE flight_id = ?
-            AND seat_number = ?
-        """, (
-            passenger_id,
-            flight_id,
-            seat_number,
-        ))
-
-        conn.commit()
-
-        return True, "Seat reserved successfully."
+        return False, "Seat already reserved."
 
     except Exception as e:
         return False, str(e)

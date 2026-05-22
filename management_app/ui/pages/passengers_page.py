@@ -46,21 +46,24 @@ class _ProgressBar(QWidget):
 
     def paintEvent(self, _):
         p = QPainter(self)
-        p.setRenderHint(QPainter.Antialiasing)
-        w, h = self.width(), self.height()
-        r = h / 2
+        try:
+            p.setRenderHint(QPainter.Antialiasing)
+            w, h = self.width(), self.height()
+            r = h / 2
 
-        # Track
-        track = QPainterPath()
-        track.addRoundedRect(0, 0, w, h, r, r)
-        p.fillPath(track, QBrush(QColor("#EEEEEE")))
+            # Track
+            track = QPainterPath()
+            track.addRoundedRect(0, 0, w, h, r, r)
+            p.fillPath(track, QBrush(QColor("#EEEEEE")))
 
-        # Fill
-        fw = int(w * self._pct / 100)
-        if fw > 0:
-            fill = QPainterPath()
-            fill.addRoundedRect(0, 0, fw, h, r, r)
-            p.fillPath(fill, QBrush(self._color))
+            # Fill
+            fw = int(w * self._pct / 100)
+            if fw > 0:
+                fill = QPainterPath()
+                fill.addRoundedRect(0, 0, fw, h, r, r)
+                p.fillPath(fill, QBrush(self._color))
+        finally:
+            p.end()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -73,30 +76,33 @@ class _MedalIcon(QWidget):
 
     def paintEvent(self, _):
         p = QPainter(self)
-        p.setRenderHint(QPainter.Antialiasing)
-        w, h = self.width(), self.height()
-        red = QColor(RED)
-        red_l = QColor(RED_LIGHT)
+        try:
+            p.setRenderHint(QPainter.Antialiasing)
+            w, h = self.width(), self.height()
+            red = QColor(RED)
+            red_l = QColor(RED_LIGHT)
 
-        # Nền tròn đỏ nhạt
-        p.setPen(Qt.NoPen)
-        p.setBrush(QBrush(red_l))
-        p.drawEllipse(0, 0, w, h)
+            # Nền tròn đỏ nhạt
+            p.setPen(Qt.NoPen)
+            p.setBrush(QBrush(red_l))
+            p.drawEllipse(0, 0, w, h)
 
-        # Vòng tròn đỏ viền
-        pen_red = __import__("PySide6.QtGui", fromlist=["QPen"]).QPen(red, 3)
-        p.setPen(pen_red)
-        p.setBrush(Qt.NoBrush)
-        margin = int(w * 0.14)
-        p.drawEllipse(margin, margin, w - margin * 2, h - margin * 2)
+            # Vòng tròn đỏ viền
+            pen_red = __import__("PySide6.QtGui", fromlist=["QPen"]).QPen(red, 3)
+            p.setPen(pen_red)
+            p.setBrush(Qt.NoBrush)
+            margin = int(w * 0.14)
+            p.drawEllipse(margin, margin, w - margin * 2, h - margin * 2)
 
-        # Ngôi sao ở giữa
-        p.setPen(__import__("PySide6.QtGui", fromlist=["QPen"]).QPen(red))
-        f = __import__("PySide6.QtGui", fromlist=["QFont"]).QFont()
-        f.setPointSize(int(w * 0.28))
-        f.setWeight(f.Bold)
-        p.setFont(f)
-        p.drawText(0, 0, w, h, Qt.AlignCenter, "★")
+            # Ngôi sao ở giữa
+            p.setPen(__import__("PySide6.QtGui", fromlist=["QPen"]).QPen(red))
+            f = __import__("PySide6.QtGui", fromlist=["QFont"]).QFont()
+            f.setPointSize(max(1, int(w * 0.28)))
+            f.setBold(True)
+            p.setFont(f)
+            p.drawText(0, 0, w, h, Qt.AlignCenter, "★")
+        finally:
+            p.end()
 
 
 # ─────────────────────────────────────────────────────────────────────────────

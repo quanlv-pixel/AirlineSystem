@@ -5,7 +5,7 @@ def create_payment(
     booking_id: int,
     payment_method: str,
     amount: float,
-    transaction_id: str,
+    transaction_code: str,
 ) -> tuple[bool, str]:
 
     conn = connect_db()
@@ -18,15 +18,15 @@ def create_payment(
                 payment_method,
                 amount,
                 payment_status,
-                transaction_id
+                transaction_code
             )
             VALUES (?, ?, ?, ?, ?)
         """, (
             booking_id,
             payment_method,
             amount,
-            "paid",
-            transaction_id,
+            "Paid",
+            transaction_code,
         ))
 
         conn.commit()

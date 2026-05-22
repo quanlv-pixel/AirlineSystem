@@ -272,6 +272,11 @@ def sync_mock_flight_to_db(flight_id: int) -> bool:
             mock_flight["terminal"]
         ))
         conn.commit()
+        
+        # Also populate seats for this flight
+        from shared.services.seat_service import create_seats_for_flight
+        create_seats_for_flight(flight_id)
+        
         return True
     except Exception as e:
         print(f"[flight_service] Error syncing flight {flight_id}: {e}")
