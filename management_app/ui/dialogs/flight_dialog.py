@@ -6,6 +6,27 @@ from PySide6.QtWidgets import (
 )
 
 from shared.services.flight_service import create_flight, update_flight, delete_flight
+from PySide6.QtWidgets import QComboBox
+from shared.services.flight_utils import (
+    generate_flight_code,
+    calculate_duration,
+    get_delay
+)
+
+from datetime import timedelta
+
+AIRPORTS = [
+
+"SGN",
+"HAN",
+"DAD",
+"PQC",
+"CXR",
+"SIN",
+"ICN",
+"NRT"
+
+]
 
 C_RED = "#E53935"
 C_TEXT = "#111827"
@@ -35,8 +56,31 @@ class FlightDialog(QDialog):
 
         # Form Fields
         self.code_input = self._create_input("Mã chuyến bay (vd: VN123):")
-        self.dep_input = self._create_input("Sân bay đi (vd: SGN):")
-        self.arr_input = self._create_input("Sân bay đến (vd: HAN):")
+        layout.addWidget(QLabel("Sân bay đi"))
+
+        self.dep_input=QComboBox()
+
+        self.dep_input.addItems(
+            AIRPORTS
+        )
+
+        layout.addWidget(
+            self.dep_input
+        )
+
+        layout.addWidget(
+            QLabel("Sân bay đến")
+        )
+
+        self.arr_input=QComboBox()
+
+        self.arr_input.addItems(
+            AIRPORTS
+        )
+
+        layout.addWidget(
+            self.arr_input
+        )
         
         # Departure Time
         layout.addWidget(QLabel("Thời gian khởi hành:"))
@@ -51,14 +95,6 @@ class FlightDialog(QDialog):
         self.arr_time.setDisplayFormat("yyyy-MM-dd HH:mm:ss")
         self.arr_time.setStyleSheet(self._input_style())
         layout.addWidget(self.arr_time)
-
-        # Price
-        layout.addWidget(QLabel("Giá vé cơ bản (VND):"))
-        self.price_input = QDoubleSpinBox()
-        self.price_input.setMaximum(1000000000)
-        self.price_input.setSingleStep(100000)
-        self.price_input.setStyleSheet(self._input_style())
-        layout.addWidget(self.price_input)
 
         # Seats
         layout.addWidget(QLabel("Tổng số ghế:"))
@@ -91,7 +127,6 @@ class FlightDialog(QDialog):
             except Exception:
                 pass
                 
-            self.price_input.setValue(getattr(self.flight, 'ticket_price', 0))
             self.seats_input.setValue(getattr(self.flight, 'total_seats', 0))
             self.seats_input.setReadOnly(True)
             self.seats_input.setStyleSheet(self._input_style(readonly=True))
@@ -139,12 +174,21 @@ class FlightDialog(QDialog):
         return inp
 
     def handle_save(self):
-        f_code = self.code_input.text().strip()
-        dep = self.dep_input.text().strip()
-        arr = self.arr_input.text().strip()
+        f_code = generate_flight_code(dep, arr)
+        dep=self.dep_input.currentText()
+        arr=self.arr_input.currentText()
         d_time = self.dep_time.dateTime().toString("yyyy-MM-dd HH:mm:ss")
-        a_time = self.arr_time.dateTime().toString("yyyy-MM-dd HH:mm:ss")
-        price = self.price_input.value()
+        duration=calculate_duration(dep, arr)
+        delay=get_delay(dep)
+
+        minutes=duration+delay
+
+        arrival=self.dep_time.dateTime()
+
+        arrival=arrival.addSecs(minutes*60)
+
+        a_time=arrival.toString("yyyy-MM-dd HH:mm:ss")
+
         seats = self.seats_input.value()
 
         if not f_code or not dep or not arr:
@@ -156,8 +200,7 @@ class FlightDialog(QDialog):
                 flight_id=self.flight.flight_id,
                 departure_time=d_time,
                 arrival_time=a_time,
-                ticket_price=price,
-                status="Scheduled"  # Keep status simple for now
+                status="Scheduled" 
             )
             if success:
                 QMessageBox.information(self, "Thành công", "Đã cập nhật chuyến bay!")
@@ -173,7 +216,7 @@ class FlightDialog(QDialog):
                 departure_time=d_time,
                 arrival_time=a_time,
                 total_seats=seats,
-                ticket_price=price,
+                ticket_price=0,
                 aircraft="A320",
                 gate="G1",
                 terminal="T1"

@@ -11,7 +11,8 @@ python database/init_db.py
 
 import sqlite3
 import hashlib
-import os
+import os 
+from database.seed_flights import seed_flights
 
 DB_PATH = os.path.join(
     os.path.dirname(__file__),
@@ -57,24 +58,27 @@ def init_db():
     # =========================================================
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS flights (
-
             flight_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            flight_number TEXT NOT NULL,
+            flight_number TEXT UNIQUE NOT NULL,
             airline_name TEXT NOT NULL,
             departure TEXT NOT NULL,
             destination TEXT NOT NULL,
             departure_time TEXT NOT NULL,
             arrival_time TEXT NOT NULL,
-            available_seats INTEGER NOT NULL,
-            total_seats INTEGER NOT NULL,
+            available_seats INTEGER NOT NULL DEFAULT 180,
+            total_seats INTEGER NOT NULL DEFAULT 180,
             ticket_price REAL NOT NULL,
-            status TEXT DEFAULT 'scheduled',
+            status TEXT DEFAULT 'Scheduled',
             aircraft TEXT,
             gate TEXT,
             terminal TEXT,
+            delay_minutes INTEGER DEFAULT 0,
+            flight_duration INTEGER DEFAULT 0,
+            weather_status TEXT,
+            flight_type TEXT DEFAULT 'Domestic',
             created_at TEXT DEFAULT CURRENT_TIMESTAMP
         )
-    """)
+        """)
 
     # =========================================================
     # PASSENGERS
@@ -180,11 +184,52 @@ def init_db():
     """)
 
     # =========================================================
+    # AIRPORTS
+    # =========================================================
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS airports(
+            airport_code TEXT PRIMARY KEY,
+            airport_name TEXT,
+            city TEXT,
+            country TEXT
+        )
+        """)
+    
+    cursor.executemany("""
+        INSERT OR IGNORE INTO airports
+        VALUES(?,?,?,?)
+        """,[
+        ("SGN","Tan Son Nhat Airport","Ho Chi Minh","Vietnam"),
+        ("HAN","Noi Bai Airport","Ha Noi","Vietnam"),
+        ("DAD","Da Nang Airport","Da Nang","Vietnam"),
+        ("PQC","Phu Quoc Airport","Phu Quoc","Vietnam"),
+        ("CXR","Cam Ranh Airport","Nha Trang","Vietnam"),
+        ("SIN","Changi Airport","Singapore","Singapore"),
+        ("BKK","Suvarnabhumi Airport","Bangkok","Thailand"),
+        ("ICN","Incheon Airport","Seoul","Korea"),
+        ("NRT","Narita Airport","Tokyo","Japan")
+        ])
+    
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS flight_delays(
+        delay_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        flight_id INTEGER,
+        reason TEXT,
+        delay_minutes INTEGER,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+
+        FOREIGN KEY(flight_id)
+        REFERENCES flights(flight_id)
+        ON DELETE CASCADE
+    )
+    """)
+
+    # =========================================================
     # EMAIL LOGS
     # =========================================================
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS email_logs (
-
             email_log_id INTEGER PRIMARY KEY AUTOINCREMENT,
             passenger_id INTEGER,
             recipient_email TEXT,
@@ -197,12 +242,24 @@ def init_db():
         )
     """)
 
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS flight_logs(
+        log_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        flight_id INTEGER,
+        action TEXT,
+        created_by TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(flight_id)
+        REFERENCES flights(flight_id)
+        ON DELETE CASCADE
+    )
+    """)
+
     # =========================================================
     # SYSTEM SETTINGS
     # =========================================================
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS system_settings (
-
             setting_id INTEGER PRIMARY KEY AUTOINCREMENT,
             setting_key TEXT UNIQUE,
             setting_value TEXT
@@ -249,8 +306,9 @@ def init_db():
         print("Password: admin123")
 
     conn.commit()
-
     conn.close()
+
+    seed_flights()
 
     print("\n✅ Database initialized successfully!")
     print("""
@@ -264,10 +322,11 @@ Tables created:
 - tickets
 - seats
 - email_logs
+- flight_logs
 - system_settings
 """)
 
 
 if __name__ == "__main__":
-
     init_db()
+    

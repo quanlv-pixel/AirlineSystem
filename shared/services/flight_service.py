@@ -283,3 +283,40 @@ def sync_mock_flight_to_db(flight_id: int) -> bool:
         return False
     finally:
         conn.close()
+
+def search_flights(keyword):
+
+    conn=connect_db()
+
+    cursor=conn.cursor()
+
+    cursor.execute("""
+
+    SELECT *
+
+    FROM flights
+
+    WHERE
+
+    flight_number LIKE ?
+    OR departure LIKE ?
+    OR destination LIKE ?
+    OR airline_name LIKE ?
+
+    """,(
+
+    f"%{keyword}%",
+
+    f"%{keyword}%",
+
+    f"%{keyword}%",
+
+    f"%{keyword}%"
+
+    ))
+
+    rows=cursor.fetchall()
+
+    conn.close()
+
+    return rows

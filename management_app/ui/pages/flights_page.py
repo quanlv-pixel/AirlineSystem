@@ -7,7 +7,7 @@ from PySide6.QtWidgets import (
 )
 import csv
 from management_app.ui.dialogs.flight_dialog import FlightDialog
-
+from shared.services.flight_service import search_flights
 from shared.services.flight_service import (
     get_all_flights,
     get_flight_by_id,
@@ -581,11 +581,11 @@ class FlightsPage(QWidget):
                 flights = get_all_flights()
             except Exception:
                 flights = []
-            if not flights:
-                flights = FALLBACK_FLIGHTS
+            if flights is None:
+                flights=[]
         else:
             try:
-                flights = get_flight_by_id(keyword)
+                flights = search_flights(keyword)
             except Exception:
                 flights = []
             # Fallback tìm trong dữ liệu mẫu nếu DB chưa có
@@ -623,11 +623,11 @@ class FlightsPage(QWidget):
         try:
             with open(file_path, 'w', newline='', encoding='utf-8') as f:
                 writer = csv.writer(f)
-                writer.writerow(["Mã Chuyến", "Hãng", "Sân bay đi", "Sân bay đến", "Giờ đi", "Giờ đến", "Giá vé", "Tổng ghế", "Trạng thái", "Tàu bay"])
+                writer.writerow(["Mã Chuyến", "Hãng", "Sân bay đi", "Sân bay đến", "Giờ đi", "Giờ đến", "Tổng ghế", "Trạng thái", "Tàu bay"])
                 for fl in flights:
                     writer.writerow([
                         fl.flight_number, fl.airline_name, fl.departure, fl.destination,
-                        fl.departure_time, fl.arrival_time, fl.ticket_price,
+                        fl.departure_time, fl.arrival_time,
                         fl.total_seats, fl.status, fl.aircraft
                     ])
             QMessageBox.information(self, "Thành công", f"Đã xuất file CSV thành công:\n{file_path}")
