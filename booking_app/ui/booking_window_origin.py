@@ -43,6 +43,7 @@ from booking_app.ui.history                import HistoryPage
 from booking_app.ui.promotion              import PromotionPage
 from booking_app.ui.members                import MembersPage
 from booking_app.ui.cur_mem                import CurrentMemberPage
+from booking_app.ui.information            import InformationPage
 
 AIRPORTS = ["SGN (TP.HCM)", "HAN (Hà Nội)", "DAD (Đà Nẵng)",
             "CXR (Nha Trang)", "PQC (Phú Quốc)"]
@@ -182,7 +183,7 @@ class BookingWindow(QMainWindow):
         self.step1_search    = FlightsPage()
         self.page_history    = HistoryPage(account=self.account)
         self.page_promo      = PromotionPage()
-        self.page_info       = QWidget() # Blank QWidget placeholder for Info tab
+        self.page_info       = InformationPage(account=self.account)
         
         self.page_members    = MembersPage()
         self.page_cur_mem    = CurrentMemberPage()
@@ -220,6 +221,8 @@ class BookingWindow(QMainWindow):
         # New feature connections
         self.page_promo.activate_member_clicked.connect(lambda: self.stack.setCurrentIndex(10))
         self.page_members.register_success.connect(lambda: self.stack.setCurrentIndex(11))
+        # Information page: nút kích hoạt hội viên → chuyển sang tab Khuyến Mãi (index 2)
+        self.page_info.activate_member_clicked.connect(self._go_to_promotion)
         
         if hasattr(self.step8_ticket, 'go_home'):
             self.step8_ticket.go_home.connect(self._reset_to_home)
@@ -277,8 +280,17 @@ class BookingWindow(QMainWindow):
         self.step1_search.search_flights()
         self.stack.setCurrentIndex(0)
 
+    def _go_to_promotion(self):
+        """Chuyển sang tab KHUYẾN MÃI và cập nhật NavBar active."""
+        self.nav.set_active_tab(2)
+        self.stack.setCurrentIndex(2)
+
     def _handle_nav_tab(self, index: int):
-        if 0 <= index <= 3: self.stack.setCurrentIndex(index)
+        if 0 <= index <= 3:
+            # Khi vào tab Thông Tin (index 3), cập nhật account mới nhất
+            if index == 3:
+                self.page_info.update_account(self.account)
+            self.stack.setCurrentIndex(index)
 
     def _logout(self):
         self.close()
