@@ -110,11 +110,11 @@ class FlightDialog(QDialog):
             self.code_input.setReadOnly(True)
             self.code_input.setStyleSheet(self._input_style(readonly=True))
             
-            self.dep_input.setText(getattr(self.flight, 'departure', ''))
+            self.dep_input.setCurrentText(getattr(self.flight, 'departure', ''))
             self.dep_input.setReadOnly(True)
             self.dep_input.setStyleSheet(self._input_style(readonly=True))
             
-            self.arr_input.setText(getattr(self.flight, 'destination', ''))
+            self.arr_input.setCurrentText(getattr(self.flight, 'destination', ''))
             self.arr_input.setReadOnly(True)
             self.arr_input.setStyleSheet(self._input_style(readonly=True))
             

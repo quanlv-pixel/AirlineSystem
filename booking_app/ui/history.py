@@ -246,11 +246,15 @@ class HistoryPage(QWidget):
         """Hành động lọc danh sách và tìm kiếm text song song"""
         # Xóa toàn bộ các card cũ ra khỏi Layout (Trừ nhãn empty_lbl)
         for i in reversed(range(self.list_lay.count())):
-            item = self.list_lay.itemAt(i)
-            if item and item.widget() and item.widget() != self.empty_lbl:
-                w = item.widget()
-                w.setParent(None)
-                w.deleteLater()
+            item=self.list_lay.takeAt(i)
+
+            if item.widget():
+                w=item.widget()
+                if w != self.empty_lbl:
+                    w.deleteLater()
+
+            elif item.spacerItem():
+                pass
                 
         search_txt = self.search_input.text().strip().lower()
         visible_count = 0

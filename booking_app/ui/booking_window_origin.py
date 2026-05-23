@@ -266,6 +266,7 @@ class BookingWindow(QMainWindow):
         self.ctx["zone"] = random.choice(["Khu A", "Khu B", "Khu C"])
         
         if self._save_booking_to_db():
+            self.page_history.refresh(self.account)
             self._call_update_and_switch(self.step8_ticket, 9)
         else:
             QMessageBox.critical(self, "Lỗi", "Không thể lưu thông tin đặt vé thông qua service layer.")
@@ -276,6 +277,7 @@ class BookingWindow(QMainWindow):
             "seats": [], "seat_labels": [], "seat_fee": 0,
             "base_price": 0, "tax": 45, "fee": 12, "total": 0,
         }
+        self.page_history.refresh(self.account)
         self.nav.set_active_tab(0)
         self.step1_search.search_flights()
         self.stack.setCurrentIndex(0)
@@ -287,9 +289,15 @@ class BookingWindow(QMainWindow):
 
     def _handle_nav_tab(self, index: int):
         if 0 <= index <= 3:
-            # Khi vào tab Thông Tin (index 3), cập nhật account mới nhất
-            if index == 3:
+
+            # History
+            if index == 1:
+                self.page_history.refresh(self.account)
+
+            # Information
+            elif index == 3:
                 self.page_info.update_account(self.account)
+
             self.stack.setCurrentIndex(index)
 
     def _logout(self):

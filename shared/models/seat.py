@@ -7,16 +7,14 @@ class Seat:
         seat_number: str = None,
         seat_class: str = "Economy",
         is_reserved: int = 0,
+        passenger_id: int = None, 
     ):
         self.seat_id = seat_id
-
         self.flight_id = flight_id
-
         self.seat_number = seat_number
-
         self.seat_class = seat_class
-
         self.is_reserved = is_reserved
+        self.passenger_id = passenger_id
 
     def is_available(self) -> bool:
         return self.is_reserved == 0
@@ -25,5 +23,6 @@ class Seat:
         return (
             f"Seat(id={self.seat_id}, "
             f"seat='{self.seat_number}', "
-            f"class='{self.seat_class}')"
+            f"class='{self.seat_class}', "
+            f"passenger_id={self.passenger_id})"
         )
