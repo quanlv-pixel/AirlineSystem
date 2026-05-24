@@ -118,32 +118,47 @@ class FlightsPage(QWidget):
             if child.widget(): child.widget().deleteLater()
 
         try:
-            # Replaced direct SQLite query with flight_service
-            flights_models = get_all_flights()
+            from shared.api.mock_api import MOCK_FLIGHTS, STATUSES_NOT_BOOKABLE
+            # Dùng MOCK_FLIGHTS trực tiếp để có occupancy_percent
             flights = []
-            for f in flights_models:
-                if f.available_seats > 0:
-                    flights.append({
-                        "fid": f.flight_id, "code": f.flight_number, "aircraft": f.aircraft or "—",
-                        "dep": f.departure[:3].upper(), "dst": f.destination[:3].upper(),
-                        "dep_t": str(f.departure_time)[:5], "arr_t": str(f.arrival_time)[:5],
-                        "dur": "—", "price": int(f.ticket_price or 0)
-                    })
-            
+            for f in MOCK_FLIGHTS:
+                status = f.get("status", "Scheduled")
+                occupancy = f.get("occupancy_percent", 0)
+                # Lọc: chỉ hiển thị chuyến CHƯA khởi hành và còn < 95% chỗ
+                if status in STATUSES_NOT_BOOKABLE:
+                    continue
+                if occupancy >= 95:
+                    continue
+                flights.append({
+                    "fid":      f["flight_id"],
+                    "flight_id":f["flight_id"],
+                    "code":     f["flight_number"],
+                    "aircraft": f.get("aircraft", "—"),
+                    "dep":      f["departure"][:3].upper(),
+                    "dst":      f["destination"][:3].upper(),
+                    "dep_t":    str(f["departure_time"])[11:16],
+                    "arr_t":    str(f["arrival_time"])[11:16],
+                    "dur":      "—",
+                    "price":    int(f.get("ticket_price", 0)),
+                    "status":   status,
+                    "occupancy_percent": occupancy,
+                })
+
+            # Fallback nếu mock rỗng
             if not flights:
-                # Fallback to sample if no flights in DB
                 flights = [
-                    {"fid":1,"code":"JJ101","aircraft":"AIRBUS A321 NEO",
-                     "dep":"SGN","dst":"HAN","dep_t":"08:00","arr_t":"10:15","dur":"2H 15M","price":120},
+                    {"fid":1,"flight_id":1,"code":"JJ201","aircraft":"AIRBUS A321 NEO",
+                     "dep":"HAN","dst":"SGN","dep_t":"09:00","arr_t":"11:15",
+                     "dur":"2H 15M","price":120,"status":"Scheduled","occupancy_percent":20},
                 ]
-                
+
             for f in flights:
                 card = FlightCard(f)
                 card.selected.connect(self.flight_selected.emit)
                 self.list_layout.addWidget(card)
         except Exception as e:
             print(f"[FlightsPage Error] {e}")
-            
+
         self.list_layout.addStretch()
 
 class PlaceholderPage(QWidget):

@@ -248,8 +248,14 @@ class SelectedPanel(QWidget):
         self.deselect.emit(row, col)
 
     def clear(self):
-        for key in list(self._items.keys()):
-            self.remove_seat(*key)
+        for key, item in list(self._items.items()):
+            self._list_l.removeWidget(item)
+            item.deleteLater()
+
+        self._items.clear()
+
+        self._ph.show()
+        self._refresh_total()
 
     def _refresh_total(self):
         total = len(self._items) * SEAT_PRICE
@@ -326,9 +332,8 @@ class SeatMapWidget(QWidget):
         for row in self._rows.values():
             row.update_seats(occupied, selected)
 
-    def force_deselect(self, row: int, col: str):
-        if row in self._rows:
-            self._rows[row].update_seats(set(), set()) # Simplistic; usually we'd track state
+    def force_deselect(self, row:int, col:str, occupied:set, selected:set):
+        self.update_map(occupied, selected) 
 
 class SeatMapPage(QWidget):
     proceed  = Signal(dict)
@@ -338,6 +343,7 @@ class SeatMapPage(QWidget):
         super().__init__(parent)
         self.ctx = ctx or {}
         self.setStyleSheet(f"background:{C_BG};")
+        self._occupied=set()
 
         root = QVBoxLayout(self)
         root.setContentsMargins(28, 24, 28, 28)
@@ -366,61 +372,77 @@ class SeatMapPage(QWidget):
         root.addLayout(body, 1)
 
     def update_page(self):
-        """Fetch data dynamically and update UI."""
         flight_info = self.ctx.get("flight")
         flight_id = None
+
         if flight_info:
-            flight_id = flight_info.get("flight_id") or flight_info.get("fid")
-        
-        # Reset panel
+            flight_id = (
+                flight_info.get("flight_id")
+                or flight_info.get("fid")
+            )
+
         self._panel.clear()
-        
-        occupied_seats = self._get_occupied_seats(flight_id)
-        self._map.update_map(occupied_seats, set())
+
+        self._occupied = self._get_occupied_seats(flight_id)
+
+        self._map.update_map(
+            self._occupied,
+            set()
+        )
 
     def _get_occupied_seats(self, flight_id: int | None) -> set[tuple[int, str]]:
-        """Lấy danh sách ghế bị khóa từ database. Fix: Empty != Fallback."""
-        if flight_id is None:
-            return set()
-        
+        # 1. Thử lấy từ DB trước
+        if flight_id is not None:
+            try:
+                from shared.services.seat_service import get_seats_by_flight
+                seats = get_seats_by_flight(flight_id)
+                if seats is not None:
+                    occ = set()
+                    for s in seats:
+                        if s.is_reserved:
+                            match = re.match(r"(\d+)([A-F])", s.seat_number)
+                            if match:
+                                occ.add((int(match.group(1)), match.group(2)))
+                    # Nếu DB trả về dữ liệu (kể cả rỗng) → tin tưởng DB
+                    return occ
+            except ImportError:
+                pass
+            except Exception as e:
+                print(f"[SeatMap] DB error: {e}")
+
+        # 2. Dùng mock_api với occupancy_percent từ flight context
         try:
-            from shared.services.seat_service import get_seats_by_flight
-            seats = get_seats_by_flight(flight_id)
-            
-            # If API returns None or empty list, it means NO reservations yet
-            if seats is None: return set() 
-            
+            from shared.api.mock_api import get_mock_seat_map
+            reserved_labels = get_mock_seat_map(flight_id or 0)
             occ = set()
-            for s in seats:
-                if s.is_reserved:
-                    match = re.match(r"(\d+)([A-Z])", s.seat_number)
-                    if match:
-                        occ.add((int(match.group(1)), match.group(2)))
+            for label in reserved_labels:
+                match = re.match(r"(\d+)([A-F])", label)
+                if match:
+                    occ.add((int(match.group(1)), match.group(2)))
             return occ
-        except ImportError:
-            print("[SeatMap] seat_service not found. Using fallback.")
-            return OCCUPIED_FALLBACK
         except Exception as e:
-            print(f"[SeatMap] Lỗi lấy ghế DB: {e}")
-            return OCCUPIED_FALLBACK
+            print(f"[SeatMap] mock_api error: {e}")
+
+        # 3. Cuối cùng mới dùng hardcoded fallback
+        return OCCUPIED_FALLBACK
 
     def _on_toggle(self, row: int, col: str, selected: bool):
         if selected:
             if len(self._panel.selected_seats()) >= MAX_SEATS:
-                # Revert selection in map if limit reached
-                # We need a proper way to revert without full refresh
-                # For now, we update the specific row
-                self.update_page() 
+                self._map.update_map(
+                    self._occupied,
+                    set(self._panel.selected_seats())
+                )
                 return
             self._panel.add_seat(row, col)
         else:
             self._panel.remove_seat(row, col)
 
     def _on_panel_deselect(self, row: int, col: str):
-        # Full refresh is safest for now to ensure map matches panel
-        # but we can optimize if needed.
-        self._map.update_map(self._get_occupied_seats(self.ctx.get("flight", {}).get("fid")), 
-                            set(self._panel.selected_seats()))
+        self._map.update_map(
+            self._occupied,
+            set(self._panel.selected_seats())
+        )
 
     def _on_confirm(self, seats: list):
         self.ctx["seats"]      = seats

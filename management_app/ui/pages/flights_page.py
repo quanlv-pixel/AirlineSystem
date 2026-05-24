@@ -26,10 +26,13 @@ BORDER    = "#E5E7EB"
 
 # ── Trạng thái → (nhãn VI, màu chữ, màu nền) ─────────────────────────────────
 _STATUS_MAP = {
-    "Scheduled": ("ĐÃ LÊN LỊCH",  "#64748B", "#F1F5F9"),
-    "Delayed":   ("CHẬM CHUYẾN",  "#DC2626", "#FEF2F2"),
-    "Boarding":  ("ĐANG LÊN MÁY", "#2563EB", "#EFF6FF"),
-    "Completed": ("HOÀN THÀNH",   "#64748B", "#F1F5F9"),
+    "Scheduled":   ("ĐÃ LÊN LỊCH",  "#64748B", "#F1F5F9"),
+    "Delayed":     ("CHẬM CHUYẾN",   "#DC2626", "#FEF2F2"),
+    "Boarding":    ("ĐANG LÊN MÁY",  "#2563EB", "#EFF6FF"),
+    "Completed":   ("HOÀN THÀNH",    "#64748B", "#F1F5F9"),
+    "In Air":      ("ĐANG BAY",       "#7C3AED", "#EDE9FE"),
+    "Gate Closed": ("ĐÓNG CỔNG",     "#B45309", "#FEF3C7"),
+    "Canceled":    ("ĐÃ HỦY",         "#9CA3AF", "#F3F4F6"),
 }
 _STATUS_DEFAULT = ("ĐÚNG GIỜ", "#16A34A", "#DCFCE7")
 
@@ -43,16 +46,19 @@ _FL = namedtuple("_FL", ["flight_code","aircraft","departure","destination",
                           "occupancy_percent","status"])
 
 FALLBACK_FLIGHTS = [
-    _FL("JJ101", "Airbus A321NEO", "SGN", "HAN", 42, "default"),
-    _FL("JJ102", "Airbus A321NEO", "SGN", "HAN", 12, "default"),
-    _FL("JJ103", "Airbus A321NEO", "SGN", "HAN", 15, "Delayed"),
-    _FL("JJ201", "Boeing 737 MAX", "HAN", "SGN", 20, "default"),
-    _FL("JJ202", "Boeing 737 MAX", "HAN", "SGN",  5, "Scheduled"),
-    _FL("JJ301", "Airbus A320",    "SGN", "DAD", 30, "default"),
-    _FL("JJ302", "Airbus A320",    "DAD", "SGN", 10, "default"),
-    _FL("JJ401", "ATR 72",         "SGN", "PQC", 60, "default"),
-    _FL("JJ402", "ATR 72",         "PQC", "SGN", 35, "default"),
-    _FL("JJ501", "Boeing 787-9",   "SGN", "ICN", 78, "Boarding"),
+    # Đã khởi hành / đóng cổng → 90-100%
+    _FL("JJ101", "Airbus A321NEO", "SGN", "HAN", 96, "Delayed"),
+    _FL("JJ102", "Boeing 787-9",   "SGN", "ICN", 100,"In Air"),
+    _FL("JJ103", "Airbus A350",    "HAN", "NRT", 93, "Gate Closed"),
+    _FL("JJ104", "Airbus A321NEO", "DAD", "SGN", 91, "Completed"),
+    # Chưa khởi hành → 0-69%
+    _FL("JJ201", "Boeing 737 MAX", "HAN", "SGN", 20, "Scheduled"),
+    _FL("JJ202", "Boeing 737 MAX", "SGN", "DAD", 5,  "Scheduled"),
+    _FL("JJ301", "Airbus A320",    "SGN", "PQC", 48, "Boarding"),
+    _FL("JJ302", "Airbus A320",    "CXR", "HAN", 33, "Boarding"),
+    _FL("JJ401", "ATR 72",         "PQC", "SGN", 12, "Scheduled"),
+    # Hủy → 0%
+    _FL("JJ501", "Boeing 787-9",   "SGN", "BKK", 0,  "Canceled"),
 ]
 
 
@@ -388,7 +394,8 @@ class FlightsPage(QWidget):
         # Filter dropdown
         self.filter_box = QComboBox()
         self.filter_box.addItems([
-            "Tất cả", "Scheduled", "Boarding", "Delayed", "Completed",
+            "Tất cả", "Scheduled", "Boarding", "Delayed",
+            "In Air", "Gate Closed", "Canceled", "Completed",
         ])
         self.filter_box.setFixedHeight(32)
         self.filter_box.setStyleSheet(f"""
@@ -525,29 +532,53 @@ class FlightsPage(QWidget):
         for flight in flights:
             # Giữ nguyên logic filter chức năng
             if (selected_status != "Tất cả"
-                    and getattr(flight, "status", "default") != selected_status):
+                    and getattr(flight, "status", None) != selected_status
+                    and (not isinstance(flight, dict) or flight.get("status") != selected_status)):
                 continue
 
-            percent      = getattr(flight, "occupancy_percent", 0)
-            status       = getattr(flight, "status", "default")
+            # Đọc status: hỗ trợ cả namedtuple/model và dict
+            if isinstance(flight, dict):
+                status       = flight.get("status", "Scheduled")
+                percent_raw  = flight.get("occupancy_percent")
+                if percent_raw is None:
+                    # Tính từ available_seats nếu có
+                    total  = flight.get("total_seats", 180) or 180
+                    avail  = flight.get("available_seats", total)
+                    percent_raw = round((1 - avail / total) * 100)
+                percent = int(percent_raw)
+                code    = flight.get("flight_number", flight.get("flight_code", "—"))
+                aircraft= flight.get("aircraft", "—")
+                dep     = flight.get("departure", "—")
+                dst     = flight.get("destination", "—")
+            else:
+                status       = getattr(flight, "status", "Scheduled")
+                percent_raw  = getattr(flight, "occupancy_percent", None)
+                if percent_raw is None:
+                    total = getattr(flight, "total_seats", 180) or 180
+                    avail = getattr(flight, "available_seats", total)
+                    percent_raw = round((1 - avail / total) * 100)
+                percent = int(percent_raw)
+                code    = getattr(flight, "flight_code",   getattr(flight, "flight_number", "—"))
+                aircraft= getattr(flight, "aircraft", "—")
+                dep     = getattr(flight, "departure", "—")
+                dst     = getattr(flight, "destination", "—")
+
             vi_lbl, fg, _ = _status_info(status)
 
-            # status_color truyền vào FlightRow (giữ tương thích)
             color_map = {
-                "Delayed":   "#DC2626",
-                "Boarding":  "#2563EB",
-                "Scheduled": "#64748B",
+                "Delayed":     "#DC2626",
+                "Boarding":    "#2563EB",
+                "Scheduled":   "#64748B",
+                "In Air":      "#7C3AED",
+                "Gate Closed": "#B45309",
+                "Canceled":    "#9CA3AF",
+                "Completed":   "#64748B",
             }
             status_color = color_map.get(status, "#16A34A")
 
             row = FlightRow(
-                getattr(flight, "flight_code", getattr(flight, "flight_number", "—")),
-                getattr(flight, "aircraft",            "—"),
-                getattr(flight, "departure",           "—"),
-                getattr(flight, "destination",         "—"),
-                percent,
-                status,
-                status_color,
+                code, aircraft, dep, dst,
+                percent, status, status_color,
                 flight=flight,
                 edit_callback=self.open_edit_dialog
             )

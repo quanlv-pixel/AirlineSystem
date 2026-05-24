@@ -97,9 +97,7 @@ def create_seats_for_flight(
         conn.close()
 
 
-def get_seats_by_flight(
-    flight_id: int
-) -> list[Seat]:
+def get_seats_by_flight(flight_id: int) -> list[Seat]:
 
     conn = connect_db()
     cursor = conn.cursor()

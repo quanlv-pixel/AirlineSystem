@@ -101,16 +101,78 @@ class PaymentSummaryCard(QWidget):
     def update_data(self, ctx: dict):
         while self._root.count():
             child = self._root.takeAt(0)
-            if child.widget(): child.widget().deleteLater()
-            elif child.layout(): self._clear_layout(child.layout())
-        self._root.addWidget(lbl("Chi tiết Thanh toán", 18, 800, C_TEXT)); self._root.addSpacing(20)
-        base = self.ctx.get("base_price", 0); seat_fee = self.ctx.get("seat_fee", 0); tax = self.ctx.get("tax", 45); fee = self.ctx.get("fee", 12); self.ctx["total"] = (base + seat_fee + tax + fee)
-        for title, amount in [("Giá vé máy bay", f"${base}"), ("Phí chọn ghế", f"${seat_fee}"), ("Thuế & Phí sân bay", f"${tax}"), ("Phí quản trị hệ thống", f"${fee}")]:
-            row = QHBoxLayout(); row.addWidget(lbl(title, 13, 400, C_MID)); row.addStretch(); row.addWidget(lbl(amount, 13, 600, C_TEXT)); self._root.addLayout(row); self._root.addSpacing(12)
-        self._root.addWidget(h_sep()); self._root.addSpacing(16)
-        tot_row = QHBoxLayout(); tot_row.addWidget(lbl("TỔNG THANH TOÁN", 11, 700, C_GRAY, 1.0)); tot_row.addStretch(); tot_row.addWidget(lbl(f"${self.ctx['total']}", 32, 900, C_RED)); self._root.addLayout(tot_row); self._root.addSpacing(20)
-        btn = red_btn("THANH TOÁN NGAY  🪪", 52); btn.clicked.connect(self.proceed); self._root.addWidget(btn); self._root.addSpacing(16)
-        sec = QWidget(); sec.setStyleSheet("background:#ECFDF5;border:1px solid #A7F3D0;border-radius:12px;"); sl = QHBoxLayout(sec); sl.setContentsMargins(14,12,14,12); sl.setSpacing(10); sl.addWidget(lbl("🛡", 16, 400, C_GREEN)); sl.addWidget(lbl("Giao dịch của bạn được bảo mật bởi chuẩn mã hóa SSL/TLS 1.2", 11, 500, C_MID)); self._root.addWidget(sec); self._root.addStretch()
+            if child.widget():
+                child.widget().deleteLater()
+            elif child.layout():
+                self._clear_layout(child.layout())
+
+        self._root.addWidget(
+            lbl("Chi tiết Thanh toán", 18, 800, C_TEXT)
+        )
+        self._root.addSpacing(20)
+
+        base = ctx.get("base_price", 0)
+        seat_fee = ctx.get("seat_fee", 0)
+        tax = ctx.get("tax", 45)
+        fee = ctx.get("fee", 12)
+
+        ctx["total"] = base + seat_fee + tax + fee
+
+        for title, amount in [
+            ("Giá vé máy bay", f"${base}"),
+            ("Phí chọn ghế", f"${seat_fee}"),
+            ("Thuế & Phí sân bay", f"${tax}"),
+            ("Phí quản trị hệ thống", f"${fee}")
+        ]:
+            row = QHBoxLayout()
+            row.addWidget(lbl(title, 13, 400, C_MID))
+            row.addStretch()
+            row.addWidget(lbl(amount, 13, 600, C_TEXT))
+            self._root.addLayout(row)
+            self._root.addSpacing(12)
+
+        self._root.addWidget(h_sep())
+        self._root.addSpacing(16)
+
+        tot_row = QHBoxLayout()
+        tot_row.addWidget(
+            lbl("TỔNG THANH TOÁN", 11, 700, C_GRAY, 1.0)
+        )
+        tot_row.addStretch()
+        tot_row.addWidget(
+            lbl(f"${ctx['total']}", 32, 900, C_RED)
+        )
+        self._root.addLayout(tot_row)
+
+        self._root.addSpacing(20)
+
+        btn = red_btn("THANH TOÁN NGAY 🪪", 52)
+        btn.clicked.connect(self.proceed)
+        self._root.addWidget(btn)
+
+        self._root.addSpacing(16)
+
+        sec = QWidget()
+        sec.setStyleSheet(
+            "background:#ECFDF5;"
+            "border:1px solid #A7F3D0;"
+            "border-radius:12px;"
+        )
+
+        sl = QHBoxLayout(sec)
+        sl.setContentsMargins(14,12,14,12)
+        sl.setSpacing(10)
+
+        sl.addWidget(lbl("🛡", 16, 400, C_GREEN))
+        sl.addWidget(
+            lbl(
+                "Giao dịch của bạn được bảo mật bởi chuẩn mã hóa SSL/TLS 1.2",
+                11, 500, C_MID
+            )
+        )
+
+        self._root.addWidget(sec)
+        self._root.addStretch()
 
     def _clear_layout(self, layout):
         while layout.count():
