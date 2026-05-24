@@ -7,11 +7,6 @@ from shared.models.passenger import Passenger
 # ─────────────────────────────────────────────
 
 def _row_to_passenger(row) -> Passenger:
-    """
-    Maps a database row to a Passenger model.
-    DB Schema: passenger_id, full_name, gender, date_of_birth, nationality, 
-    phone, email, member_rank, passport_number, total_spending, created_at
-    """
     return Passenger(
         passenger_id=row[0],
         full_name=row[1],
@@ -20,7 +15,11 @@ def _row_to_passenger(row) -> Passenger:
         nationality=row[4],
         phone=row[5],
         email=row[6],
+
+        member_rank=row[7],      # thêm
         passport_number=row[8],
+        total_spending=row[9],   # thêm
+
         created_at=row[10],
     )
 
