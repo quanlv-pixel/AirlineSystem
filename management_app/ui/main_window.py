@@ -501,6 +501,13 @@ class MainWindow(QMainWindow):
         self.topbar.page_title.setText(
             labels[index]
         )
+        # Live-refresh data-heavy pages on every tab switch
+        page = self.pages.widget(index)
+        if hasattr(page, 'refresh'):
+            try:
+                page.refresh()
+            except Exception as exc:
+                print(f"[MainWindow.navigate] refresh error on page {index}: {exc}")
 
     def logout(self):
         from management_app.ui.dialogs.login_dialog import LoginDialog

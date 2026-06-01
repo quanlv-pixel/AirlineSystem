@@ -196,6 +196,8 @@ class BookingWindow(QMainWindow):
             "is_activated": is_activated,
             "promo_used":   None,
         }
+        # Guard: prevents duplicate DB writes if payment_complete fires twice
+        self._booking_saved: bool = False
 
         central = QWidget(); central.setStyleSheet(f"background:{C_BG};")
         self.setCentralWidget(central)
@@ -325,6 +327,7 @@ class BookingWindow(QMainWindow):
         self.ctx["base_price"] = flight_data.get("price", 0)
         self.ctx["total"]      = self.ctx["base_price"] + self.ctx["tax"] + self.ctx["fee"]
         self.ctx["promo_used"] = None    # reset promo each new booking
+        self._booking_saved   = False    # reset guard for the new booking flow
         if hasattr(self.step2_detail, 'flight'): self.step2_detail.flight = flight_data
         self._call_update_and_switch(self.step2_detail, 4)
 
@@ -345,6 +348,11 @@ class BookingWindow(QMainWindow):
         self._call_update_and_switch(self.step7_payment, 8)
 
     def _to_step8_ticket(self, final_ctx: dict):
+        # Guard against double invocation (e.g. signal fires twice)
+        if self._booking_saved:
+            return
+        self._booking_saved = True
+
         self.ctx.update(final_ctx)
 
         self.ctx["pnr"]      = self.ctx.get("pnr") or ("JJ" + "".join(random.choices(string.ascii_uppercase + string.digits, k=4)))
@@ -374,6 +382,8 @@ class BookingWindow(QMainWindow):
             "is_activated": get_is_activated(username),
             "promo_used":   None,
         }
+        self._booking_saved = False  # reset for next booking session
+
         self.page_history.refresh(self.account)
         self.nav.set_active_tab(0)
         self.step1_search.search_flights()
@@ -418,8 +428,16 @@ class BookingWindow(QMainWindow):
                 print(f"[Service Error] create_passenger: {msg}"); return False
 
             first_booking_id = None
-            for i, seat_label in enumerate(self.ctx.get("seat_labels", [])):
-                unique_pnr = pnr if len(self.ctx.get("seat_labels", [])) == 1 else f"{pnr}-{i+1}"
+            # Deduplicate seat labels (preserve order) to prevent double-booking
+            seen_seats: set[str] = set()
+            unique_seats: list[str] = []
+            for sl in self.ctx.get("seat_labels", []):
+                if sl not in seen_seats:
+                    seen_seats.add(sl)
+                    unique_seats.append(sl)
+
+            for i, seat_label in enumerate(unique_seats):
+                unique_pnr = pnr if len(unique_seats) == 1 else f"{pnr}-{i+1}"
                 success, msg, booking_id = create_booking(
                     booking_reference=unique_pnr,
                     passenger_id=passenger_id,

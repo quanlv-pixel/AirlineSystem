@@ -434,7 +434,17 @@ class PassengerPage(QWidget):
         f.setStyleSheet(f"background:{BORDER}; border:none;"); return f
 
     # ── Load & render ─────────────────────────────────────────────────────────
+    def refresh(self):
+        """Public API: reload enriched passenger list from DB."""
+        self.load_passengers()
+
+    def showEvent(self, event):
+        """Auto-refresh every time this page becomes visible (tab switch)."""
+        super().showEvent(event)
+        self.load_passengers()
+
     def load_passengers(self):
+
         MemberRow._instance_count = 0
         passengers = get_all_passengers_enriched()
         # Mark the session user row for live spending

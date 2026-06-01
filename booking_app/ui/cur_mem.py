@@ -2,8 +2,9 @@
 cur_mem.py
 ----------
 Giao diện Trạng Thái Hội Viên Hiện Tại (Sau khi kích hoạt)
-Updated: Dynamically renders tier card color/label/privileges based on
-         actual DB spending, computed each time the page is shown.
+Fixed: QLayout re-assignment crash removed.
+       update_member() now clears and repopulates a SINGLE permanent
+       scroll widget rather than re-creating QVBoxLayout(self).
 """
 import sys
 from PySide6.QtCore import Qt
@@ -69,6 +70,18 @@ _TIER_META = {
 }
 
 
+def _clear_layout(layout):
+    """Recursively remove and schedule-delete all items from a layout."""
+    while layout.count():
+        item = layout.takeAt(0)
+        w = item.widget()
+        if w:
+            w.setParent(None)
+            w.deleteLater()
+        elif item.layout():
+            _clear_layout(item.layout())
+
+
 class PrivilegeCard(QWidget):
     def __init__(self, icon: str, title: str, desc: str, parent=None):
         super().__init__(parent)
@@ -92,56 +105,80 @@ class PrivilegeCard(QWidget):
 
 
 class CurrentMemberPage(QWidget):
+    """
+    Safe re-usable member page.
+    Layout structure (created ONCE in __init__, never recreated):
+
+        QVBoxLayout(self)  ← self._outer
+          ├─ QScrollArea
+          │    └─ QWidget (self._body)
+          │         └─ QVBoxLayout (self._body_lay)  ← populated/cleared each refresh
+          └─ footer widget
+    """
+
     def __init__(self, account: dict | None = None, parent=None):
         super().__init__(parent)
         self._account = account or {}
-        self._build_ui()
 
-    def update_member(self, account: dict):
-        """Refresh with new account data (re-queries DB for spending)."""
-        self._account = account
-        # Rebuild by clearing layout
-        old = self.layout()
-        if old:
-            # Detach and delete
-            while old.count():
-                item = old.takeAt(0)
-                if item.widget():
-                    item.widget().deleteLater()
-            import shiboken6
-            if shiboken6.isValid(old):
-                old.deleteLater()
-        self._build_ui()
-
-    def _build_ui(self):
-        username = self._account.get("username", "")
-        name     = self._account.get("name") or self._account.get("full_name") or "Hội Viên"
-
-        # Compute tier dynamically from DB
-        spending = get_user_spending_from_db(username) if username else 0.0
-        tier     = get_tier_for_spending(spending)
-        meta     = _TIER_META.get(tier, _TIER_META["THÀNH VIÊN"])
-
-        main_lay = QVBoxLayout(self)
-        main_lay.setContentsMargins(0, 0, 0, 0)
-        main_lay.setSpacing(0)
+        # ── Permanent outer layout (created exactly once) ─────────────────────
+        self._outer = QVBoxLayout(self)
+        self._outer.setContentsMargins(0, 0, 0, 0)
+        self._outer.setSpacing(0)
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.NoFrame)
         scroll.setStyleSheet(f"background:{C_BG}; border:none;")
-        main_lay.addWidget(scroll, 1)
+        self._outer.addWidget(scroll, 1)
 
-        body = QWidget()
-        body.setStyleSheet(f"background:{C_BG};")
-        scroll.setWidget(body)
+        self._body = QWidget()
+        self._body.setStyleSheet(f"background:{C_BG};")
+        scroll.setWidget(self._body)
 
-        lay = QVBoxLayout(body)
-        lay.setContentsMargins(30, 24, 30, 30)
-        lay.setSpacing(20)
+        # Permanent inner layout — we clear/repopulate this, never replace it
+        self._body_lay = QVBoxLayout(self._body)
+        self._body_lay.setContentsMargins(30, 24, 30, 30)
+        self._body_lay.setSpacing(20)
 
-        lay.addWidget(lbl("Thành viên JetJet Elite", 24, 800, C_DARK))
-        lay.addWidget(lbl("Chào mừng trở lại! Xem thông tin phân hạng và ưu đãi dặm bay tích lũy của bạn.", 13, 400, C_GRAY))
+        # Footer slot — inserted once, stays at the bottom
+        self._footer = get_footer()
+        self._outer.addWidget(self._footer)
+
+        # Initial population
+        self._populate()
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Public API
+    # ─────────────────────────────────────────────────────────────────────────
+    def update_member(self, account: dict):
+        """
+        Safe refresh: clears and repopulates self._body_lay only.
+        Never touches self._outer or creates a new top-level layout.
+        """
+        self._account = account
+        self._populate()
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Internal population (no layout creation — only content)
+    # ─────────────────────────────────────────────────────────────────────────
+    def _populate(self):
+        # 1. Clear all content from the body layout safely
+        _clear_layout(self._body_lay)
+
+        username = self._account.get("username", "")
+        name     = self._account.get("name") or self._account.get("full_name") or "Hội Viên"
+
+        # 2. Compute tier dynamically from DB spending
+        spending = get_user_spending_from_db(username) if username else 0.0
+        tier     = get_tier_for_spending(spending)
+        meta     = _TIER_META.get(tier, _TIER_META["THÀNH VIÊN"])
+
+        # ── Page title ────────────────────────────────────────────────────────
+        self._body_lay.addWidget(lbl("Thành viên JetJet Elite", 24, 800, C_DARK))
+        self._body_lay.addWidget(lbl(
+            "Chào mừng trở lại! Xem thông tin phân hạng và ưu đãi dặm bay tích lũy của bạn.",
+            13, 400, C_GRAY
+        ))
 
         # ── Tier card ─────────────────────────────────────────────────────────
         tier_card = QWidget()
@@ -162,9 +199,8 @@ class CurrentMemberPage(QWidget):
 
         # Progress bar to next tier
         if meta["next"] and meta["next_amt"] > 0:
-            next_lower = {"BẠCH KIM": 3000, "HẠNG VÀNG": 1500, "HẠNG BẠC": 500}.get(tier, 0)
-            bar_max  = meta["next_amt"]
-            bar_val  = min(int(spending), bar_max)
+            bar_max = meta["next_amt"]
+            bar_val = min(int(spending), bar_max)
             prog_lay = QHBoxLayout()
             pbar = QProgressBar()
             pbar.setRange(0, bar_max)
@@ -182,10 +218,10 @@ class CurrentMemberPage(QWidget):
         else:
             tc_lay.addWidget(lbl("Bạn đang ở hạng cao nhất! ✨", 12, 600, C_WHITE))
 
-        lay.addWidget(tier_card)
+        self._body_lay.addWidget(tier_card)
 
         # ── Privileges ────────────────────────────────────────────────────────
-        lay.addWidget(lbl(f"Đặc quyền {tier} của bạn", 16, 700, C_DARK))
+        self._body_lay.addWidget(lbl(f"Đặc quyền {tier} của bạn", 16, 700, C_DARK))
         grid = QGridLayout()
         grid.setSpacing(14)
 
@@ -193,10 +229,8 @@ class CurrentMemberPage(QWidget):
             card = PrivilegeCard(icon, title, desc)
             grid.addWidget(card, i // 2, i % 2)
 
-        lay.addLayout(grid)
-        lay.addStretch()
-
-        main_lay.addWidget(get_footer())
+        self._body_lay.addLayout(grid)
+        self._body_lay.addStretch()
 
 
 if __name__ == "__main__":

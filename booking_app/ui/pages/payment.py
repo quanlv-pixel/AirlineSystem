@@ -323,8 +323,14 @@ class PaymentPage(QWidget):
     def _on_pay(self):
         total = self.ctx.get("total", 0)
         dlg = SSLDialog(total, self)
-        dlg.payment_complete.connect(lambda: self.payment_complete.emit(self.ctx))
+        # Qt.SingleShotConnection ensures the slot fires at most once per dialog,
+        # preventing double create_booking() calls if the dialog is re-shown.
+        dlg.payment_complete.connect(
+            lambda: self.payment_complete.emit(self.ctx),
+            Qt.SingleShotConnection
+        )
         dlg.exec()
+
 
 
 if __name__ == "__main__":

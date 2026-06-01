@@ -781,9 +781,24 @@ class BookingsPage(QWidget):
 
     # ── Public API ──────────────────────────────────────────────────────────
     def refresh(self):
-        """Tải lại dữ liệu từ DB (hoặc sample nếu DB chưa có)."""
-        db_data = _load_from_db()
-        self._all_data = db_data if db_data else list(SAMPLE)
+        """
+        Tải lại dữ liệu: DB rows (newest first) + SAMPLE rows that are
+        not already represented by a matching PNR in the DB result.
+        This ensures real bookings are always visible AND the rich demo
+        data is never silently erased.
+        """
+        db_data = _load_from_db() or []
+
+        # Build a set of PNRs that already came from the DB
+        db_pnrs = {r["pnr"].upper() for r in db_data}
+
+        # Append SAMPLE rows whose PNR is not already in the DB set
+        merged = list(db_data)
+        for row in SAMPLE:
+            if row["pnr"].upper() not in db_pnrs:
+                merged.append(row)
+
+        self._all_data = merged
         self._apply_filter()
 
     # ── Filter ───────────────────────────────────────────────────────────────
