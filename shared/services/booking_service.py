@@ -16,6 +16,7 @@ def row_to_booking(row):
         booking_status=row["booking_status"],
         booking_date=row["booking_date"],
         created_by=row["created_by"],
+        promo_used=row["promo_used"] if "promo_used" in row.keys() else None,
     )
 
 def get_all_bookings():
@@ -35,7 +36,8 @@ def create_booking(
     booking_class: str = "Economy",
     payment_status: str = "Pending",
     booking_status: str = "Pending",
-    created_by: str = None
+    created_by: str = None,
+    promo_used: str = None,
 ) -> tuple[bool, str, int | None]:
     conn = get_connection()
     cursor = conn.cursor()
@@ -43,10 +45,12 @@ def create_booking(
         cursor.execute("""
             INSERT INTO bookings (
                 booking_reference, passenger_id, flight_id, seat_number,
-                booking_class, total_amount, payment_status, booking_status, created_by
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                booking_class, total_amount, payment_status, booking_status,
+                created_by, promo_used
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (booking_reference, passenger_id, flight_id, seat_number,
-              booking_class, total_amount, payment_status, booking_status, created_by))
+              booking_class, total_amount, payment_status, booking_status,
+              created_by, promo_used))
         conn.commit()
         new_id = cursor.lastrowid
         return True, "Booking created successfully.", new_id

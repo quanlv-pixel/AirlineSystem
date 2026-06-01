@@ -24,6 +24,7 @@ def _row_to_account(row: tuple) -> Account:
         phone=row[6],
         created_at=row[7],
         last_login=row[8],
+        is_activated=row[9] if len(row) > 9 else 0,
     )
 
 
@@ -39,7 +40,7 @@ def login(identifier: str, password: str) -> Account | None:
         cursor.execute(
             """
             SELECT account_id, username, email, password_hash,
-                   full_name, role, phone, created_at, last_login
+                   full_name, role, phone, created_at, last_login, is_activated
             FROM accounts
             WHERE (email = ? OR username = ?) AND password_hash = ?
             """,
@@ -114,7 +115,7 @@ def get_all_accounts() -> list[Account]:
     cursor.execute(
         """
         SELECT account_id, username, email, password_hash,
-               full_name, role, phone, created_at, last_login
+               full_name, role, phone, created_at, last_login, is_activated
         FROM accounts
         ORDER BY account_id
         """
@@ -130,7 +131,7 @@ def get_account_by_id(account_id: int) -> Account | None:
     cursor.execute(
         """
         SELECT account_id, username, email, password_hash,
-               full_name, role, phone, created_at, last_login
+               full_name, role, phone, created_at, last_login, is_activated
         FROM accounts WHERE account_id = ?
         """,
         (account_id,),
@@ -138,6 +139,45 @@ def get_account_by_id(account_id: int) -> Account | None:
     row = cursor.fetchone()
     conn.close()
     return _row_to_account(row) if row else None
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# VIP Activation helpers
+# ─────────────────────────────────────────────────────────────────────────────
+
+def get_is_activated(username: str) -> int:
+    """Return 1 if account is activated (VIP), else 0."""
+    conn = connect_db()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "SELECT is_activated FROM accounts WHERE username = ?",
+            (username,),
+        )
+        row = cursor.fetchone()
+        return int(row[0]) if row else 0
+    except Exception:
+        return 0
+    finally:
+        conn.close()
+
+
+def set_is_activated(username: str, value: int = 1) -> bool:
+    """Set is_activated flag for an account. Returns True on success."""
+    conn = connect_db()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "UPDATE accounts SET is_activated = ? WHERE username = ?",
+            (value, username),
+        )
+        conn.commit()
+        return cursor.rowcount > 0
+    except Exception as e:
+        print(f"[account_service] set_is_activated error: {e}")
+        return False
+    finally:
+        conn.close()
 
 
 def update_account(

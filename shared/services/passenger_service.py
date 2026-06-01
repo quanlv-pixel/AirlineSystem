@@ -248,3 +248,75 @@ def get_total_passengers() -> int:
     conn.close()
 
     return total
+
+
+# ─────────────────────────────────────────────
+# ENRICHED (with is_activated from accounts)
+# ─────────────────────────────────────────────
+
+class PassengerEnriched(Passenger):
+    """Passenger with is_activated field joined from accounts table."""
+    def __init__(self, *args, is_activated: int = 0, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.is_activated = is_activated
+
+
+def _row_to_enriched(row) -> PassengerEnriched:
+    p = PassengerEnriched(
+        passenger_id=row[0],
+        full_name=row[1],
+        gender=row[2],
+        date_of_birth=row[3],
+        nationality=row[4],
+        phone=row[5],
+        email=row[6],
+        member_rank=row[7],
+        passport_number=row[8],
+        total_spending=row[9],
+        created_at=row[10],
+        is_activated=int(row[11]) if row[11] is not None else 0,
+    )
+    return p
+
+
+def get_all_passengers_enriched() -> list[PassengerEnriched]:
+    """
+    Returns all passengers with is_activated joined from accounts on email.
+    Used by management_app to show/hide tier badges based on VIP activation.
+    """
+    conn = connect_db()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT
+            p.passenger_id, p.full_name, p.gender, p.date_of_birth, p.nationality,
+            p.phone, p.email, p.member_rank, p.passport_number, p.total_spending,
+            p.created_at,
+            COALESCE(a.is_activated, 0) AS is_activated
+        FROM passengers p
+        LEFT JOIN accounts a ON LOWER(p.email) = LOWER(a.email)
+        ORDER BY p.passenger_id DESC
+    """)
+    rows = cursor.fetchall()
+    conn.close()
+    return [_row_to_enriched(row) for row in rows]
+
+
+def search_passengers_enriched(keyword: str) -> list[PassengerEnriched]:
+    """Enriched passenger search (includes is_activated)."""
+    conn = connect_db()
+    cursor = conn.cursor()
+    q = f"%{keyword}%"
+    cursor.execute("""
+        SELECT
+            p.passenger_id, p.full_name, p.gender, p.date_of_birth, p.nationality,
+            p.phone, p.email, p.member_rank, p.passport_number, p.total_spending,
+            p.created_at,
+            COALESCE(a.is_activated, 0) AS is_activated
+        FROM passengers p
+        LEFT JOIN accounts a ON LOWER(p.email) = LOWER(a.email)
+        WHERE p.full_name LIKE ? OR p.email LIKE ? OR p.passport_number LIKE ?
+        ORDER BY p.passenger_id DESC
+    """, (q, q, q))
+    rows = cursor.fetchall()
+    conn.close()
+    return [_row_to_enriched(row) for row in rows]

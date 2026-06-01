@@ -13,6 +13,7 @@ class Booking:
         booking_status: str = "Pending",
         booking_date: str = None,
         created_by: int = None,
+        promo_used: str = None,
     ):
         self.booking_id = booking_id
 
@@ -35,6 +36,8 @@ class Booking:
         self.booking_date = booking_date
 
         self.created_by = created_by
+
+        self.promo_used = promo_used
 
     def is_paid(self) -> bool:
         return self.payment_status == "Paid"

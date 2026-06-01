@@ -1,8 +1,12 @@
 """
-booking_window_origin.py [REFACTORED]
---------------------------------------------
+booking_window_origin.py [REFACTORED + FEATURE-LINKED]
+------------------------------------------------------------
 Main Window for the Booking Application.
-Updated to use centralized services and APIs from shared/ directory.
+Updated:
+  - VIP activation state read from DB on startup & persisted on activation
+  - Promo tab shows PromotionPage or CurrentMemberPage based on is_activated
+  - promo_used passed through ctx to _save_booking_to_db
+  - MembersPage and CurrentMemberPage receive live account context
 """
 from __future__ import annotations
 import sys, os, random, string
@@ -19,8 +23,10 @@ from shared.services.passenger_service import create_passenger
 from shared.services.booking_service import create_booking
 from shared.services.seat_service import reserve_seat
 from shared.services.payment_service import create_payment
+from shared.services.account_service import get_is_activated, set_is_activated
+from shared.services.member_service import get_tier_for_user
 
-# Centralized APIs (using as placeholders since they are empty)
+# Centralized APIs
 from shared.api.aviation_api import *
 from shared.api.weather_api import *
 
@@ -38,7 +44,7 @@ from booking_app.ui.pages.confirmation     import ConfirmPage
 from booking_app.ui.pages.payment          import PaymentPage
 from booking_app.ui.pages.ticket           import TicketPage
 
-# New feature pages
+# Feature pages
 from booking_app.ui.history                import HistoryPage
 from booking_app.ui.promotion              import PromotionPage
 from booking_app.ui.members                import MembersPage
@@ -47,6 +53,7 @@ from booking_app.ui.information            import InformationPage
 
 AIRPORTS = ["SGN (TP.HCM)", "HAN (Hà Nội)", "DAD (Đà Nẵng)",
             "CXR (Nha Trang)", "PQC (Phú Quốc)"]
+
 
 class FlightCard(QFrame):
     selected = Signal(dict)
@@ -79,6 +86,7 @@ class FlightCard(QFrame):
         btn.clicked.connect(lambda: self.selected.emit(self.flight))
         v3.addWidget(btn)
         lay.addLayout(v3, 2)
+
 
 class FlightsPage(QWidget):
     flight_selected = Signal(dict)
@@ -119,16 +127,12 @@ class FlightsPage(QWidget):
 
         try:
             from shared.api.mock_api import MOCK_FLIGHTS, STATUSES_NOT_BOOKABLE
-            # Dùng MOCK_FLIGHTS trực tiếp để có occupancy_percent
             flights = []
             for f in MOCK_FLIGHTS:
-                status = f.get("status", "Scheduled")
+                status    = f.get("status", "Scheduled")
                 occupancy = f.get("occupancy_percent", 0)
-                # Lọc: chỉ hiển thị chuyến CHƯA khởi hành và còn < 95% chỗ
-                if status in STATUSES_NOT_BOOKABLE:
-                    continue
-                if occupancy >= 95:
-                    continue
+                if status in STATUSES_NOT_BOOKABLE: continue
+                if occupancy >= 95:                 continue
                 flights.append({
                     "fid":      f["flight_id"],
                     "flight_id":f["flight_id"],
@@ -143,15 +147,12 @@ class FlightsPage(QWidget):
                     "status":   status,
                     "occupancy_percent": occupancy,
                 })
-
-            # Fallback nếu mock rỗng
             if not flights:
                 flights = [
                     {"fid":1,"flight_id":1,"code":"JJ201","aircraft":"AIRBUS A321 NEO",
                      "dep":"HAN","dst":"SGN","dep_t":"09:00","arr_t":"11:15",
                      "dur":"2H 15M","price":120,"status":"Scheduled","occupancy_percent":20},
                 ]
-
             for f in flights:
                 card = FlightCard(f)
                 card.selected.connect(self.flight_selected.emit)
@@ -161,12 +162,14 @@ class FlightsPage(QWidget):
 
         self.list_layout.addStretch()
 
+
 class PlaceholderPage(QWidget):
     def __init__(self, icon: str, title: str):
         super().__init__()
         lay = QVBoxLayout(self); lay.setAlignment(Qt.AlignCenter)
         lay.addWidget(lbl(icon, size=48))
         lay.addWidget(lbl(f"{title} — Tính năng đang phát triển", size=18, weight=600, color=C_MID))
+
 
 class BookingWindow(QMainWindow):
     def __init__(self, account=None):
@@ -175,10 +178,23 @@ class BookingWindow(QMainWindow):
         self.setWindowTitle("JetJet Air — Hệ thống Quản lý Đặt vé Máy bay")
         self.resize(1300, 850)
 
+        # ── Load activation state from DB on startup ──────────────────────────
+        username = self.account.get("username", "")
+        is_activated = get_is_activated(username) if username else 0
+
         self.ctx: dict = {
-            "account": self.account, "flight": None, "passenger": None,
-            "seats": [], "seat_labels": [], "seat_fee": 0,
-            "base_price": 0, "tax": 45, "fee": 12, "total": 0,
+            "account":      self.account,
+            "flight":       None,
+            "passenger":    None,
+            "seats":        [],
+            "seat_labels":  [],
+            "seat_fee":     0,
+            "base_price":   0,
+            "tax":          45,
+            "fee":          12,
+            "total":        0,
+            "is_activated": is_activated,
+            "promo_used":   None,
         }
 
         central = QWidget(); central.setStyleSheet(f"background:{C_BG};")
@@ -195,14 +211,18 @@ class BookingWindow(QMainWindow):
         self._init_all_pages()
 
     def _init_all_pages(self):
+        # Compute user tier for promotion page
+        username = self.account.get("username", "")
+        tier = get_tier_for_user(username) if self.ctx.get("is_activated") else None
+
         self.step1_search    = FlightsPage()
         self.page_history    = HistoryPage(account=self.account)
-        self.page_promo      = PromotionPage()
+        self.page_promo      = PromotionPage(tier=tier)
         self.page_info       = InformationPage(account=self.account)
-        
-        self.page_members    = MembersPage()
-        self.page_cur_mem    = CurrentMemberPage()
-        
+
+        self.page_members    = MembersPage(account=self.account)
+        self.page_cur_mem    = CurrentMemberPage(account=self.account)
+
         self.step2_detail    = FlightDetailPage(None)
         self.step3_passenger = PassengerInfoPage(self.ctx)
         self.step4_seats     = SeatMapPage(self.ctx)
@@ -210,7 +230,7 @@ class BookingWindow(QMainWindow):
         self.step7_payment   = PaymentPage(self.ctx)
         self.step8_ticket    = TicketPage(self.ctx)
 
-        # Add pages to stack. Indices:
+        # Stack indices:
         # 0: Search, 1: History, 2: Promotion, 3: Info
         # 4: Detail, 5: Passenger, 6: Seats, 7: Confirm, 8: Payment, 9: Ticket
         # 10: Members, 11: Current Member
@@ -220,7 +240,7 @@ class BookingWindow(QMainWindow):
                      self.page_members, self.page_cur_mem]:
             self.stack.addWidget(page)
 
-        # Signal connections for booking flow
+        # ── Signal connections for booking flow ───────────────────────────────
         self.step1_search.flight_selected.connect(self._to_step2_detail)
         self.step2_detail.proceed.connect(self._to_step3_passenger)
         self.step2_detail.go_back.connect(lambda: self.stack.setCurrentIndex(0))
@@ -232,26 +252,79 @@ class BookingWindow(QMainWindow):
         self.step6_confirm.go_back.connect(lambda: self.stack.setCurrentIndex(6))
         self.step7_payment.payment_complete.connect(self._to_step8_ticket)
         self.step7_payment.go_back.connect(lambda: self.stack.setCurrentIndex(7))
-        
-        # New feature connections
-        self.page_promo.activate_member_clicked.connect(lambda: self.stack.setCurrentIndex(10))
-        self.page_members.register_success.connect(lambda: self.stack.setCurrentIndex(11))
-        # Information page: nút kích hoạt hội viên → chuyển sang tab Khuyến Mãi (index 2)
+
+        # ── VIP activation flow ───────────────────────────────────────────────
+        self.page_promo.activate_member_clicked.connect(self._go_to_members)
+        self.page_members.register_success.connect(self._on_member_activated)
         self.page_info.activate_member_clicked.connect(self._go_to_promotion)
-        
+
         if hasattr(self.step8_ticket, 'go_home'):
             self.step8_ticket.go_home.connect(self._reset_to_home)
 
+    # ─────────────────────────────────────────────────────────────────────────
+    # Navigation helpers
+    # ─────────────────────────────────────────────────────────────────────────
     def _call_update_and_switch(self, page_widget, index):
         if hasattr(page_widget, 'update_page'):
             try: page_widget.update_page()
             except TypeError: page_widget.update_page(self.ctx)
         self.stack.setCurrentIndex(index)
 
+    def _go_to_members(self):
+        """Navigate to the membership activation form."""
+        self.page_members.set_account(self.account)
+        self.stack.setCurrentIndex(10)
+
+    def _on_member_activated(self):
+        """Called after MembersPage persists is_activated=1 to DB."""
+        self.ctx["is_activated"] = 1
+
+        # Refresh tier and update promo page
+        username = self.account.get("username", "")
+        tier = get_tier_for_user(username)
+        self.page_promo.set_tier(tier)
+
+        # Refresh CurrentMemberPage with new account context
+        self.page_cur_mem.update_member(self.account)
+
+        self.stack.setCurrentIndex(11)
+
+    def _go_to_promotion(self):
+        """Navigate to Promotion tab, showing the right sub-page."""
+        self.nav.set_active_tab(2)
+        self._show_promo_or_member()
+
+    def _show_promo_or_member(self):
+        """Show CurrentMemberPage if activated, else PromotionPage."""
+        if self.ctx.get("is_activated"):
+            self.page_cur_mem.update_member(self.account)
+            self.stack.setCurrentIndex(11)
+        else:
+            self.stack.setCurrentIndex(2)
+
+    def _handle_nav_tab(self, index: int):
+        if 0 <= index <= 3:
+            if index == 1:
+                self.page_history.refresh(self.account)
+            elif index == 2:
+                # Always check activation state from DB before showing promo tab
+                username = self.account.get("username", "")
+                self.ctx["is_activated"] = get_is_activated(username)
+                self._show_promo_or_member()
+                return
+            elif index == 3:
+                self.page_info.update_account(self.account)
+
+            self.stack.setCurrentIndex(index)
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Booking flow steps
+    # ─────────────────────────────────────────────────────────────────────────
     def _to_step2_detail(self, flight_data: dict):
-        self.ctx["flight"] = flight_data
+        self.ctx["flight"]     = flight_data
         self.ctx["base_price"] = flight_data.get("price", 0)
-        self.ctx["total"] = self.ctx["base_price"] + self.ctx["tax"] + self.ctx["fee"]
+        self.ctx["total"]      = self.ctx["base_price"] + self.ctx["tax"] + self.ctx["fee"]
+        self.ctx["promo_used"] = None    # reset promo each new booking
         if hasattr(self.step2_detail, 'flight'): self.step2_detail.flight = flight_data
         self._call_update_and_switch(self.step2_detail, 4)
 
@@ -273,13 +346,12 @@ class BookingWindow(QMainWindow):
 
     def _to_step8_ticket(self, final_ctx: dict):
         self.ctx.update(final_ctx)
-        
-        # Populate final boarding info
-        self.ctx["pnr"] = self.ctx.get("pnr") or ("JJ" + "".join(random.choices(string.ascii_uppercase + string.digits, k=4)))
-        self.ctx["gate"] = random.choice(["B21", "B22", "A10", "A12", "C05"])
+
+        self.ctx["pnr"]      = self.ctx.get("pnr") or ("JJ" + "".join(random.choices(string.ascii_uppercase + string.digits, k=4)))
+        self.ctx["gate"]     = random.choice(["B21", "B22", "A10", "A12", "C05"])
         self.ctx["terminal"] = "Nhà ga T1"
-        self.ctx["zone"] = random.choice(["Khu A", "Khu B", "Khu C"])
-        
+        self.ctx["zone"]     = random.choice(["Khu A", "Khu B", "Khu C"])
+
         if self._save_booking_to_db():
             self.page_history.refresh(self.account)
             self._call_update_and_switch(self.step8_ticket, 9)
@@ -287,59 +359,51 @@ class BookingWindow(QMainWindow):
             QMessageBox.critical(self, "Lỗi", "Không thể lưu thông tin đặt vé thông qua service layer.")
 
     def _reset_to_home(self):
+        username = self.account.get("username", "")
         self.ctx = {
-            "account": self.account, "flight": None, "passenger": None,
-            "seats": [], "seat_labels": [], "seat_fee": 0,
-            "base_price": 0, "tax": 45, "fee": 12, "total": 0,
+            "account":      self.account,
+            "flight":       None,
+            "passenger":    None,
+            "seats":        [],
+            "seat_labels":  [],
+            "seat_fee":     0,
+            "base_price":   0,
+            "tax":          45,
+            "fee":          12,
+            "total":        0,
+            "is_activated": get_is_activated(username),
+            "promo_used":   None,
         }
         self.page_history.refresh(self.account)
         self.nav.set_active_tab(0)
         self.step1_search.search_flights()
         self.stack.setCurrentIndex(0)
 
-    def _go_to_promotion(self):
-        """Chuyển sang tab KHUYẾN MÃI và cập nhật NavBar active."""
-        self.nav.set_active_tab(2)
-        self.stack.setCurrentIndex(2)
-
-    def _handle_nav_tab(self, index: int):
-        if 0 <= index <= 3:
-
-            # History
-            if index == 1:
-                self.page_history.refresh(self.account)
-
-            # Information
-            elif index == 3:
-                self.page_info.update_account(self.account)
-
-            self.stack.setCurrentIndex(index)
-
     def _logout(self):
         self.close()
 
+    # ─────────────────────────────────────────────────────────────────────────
+    # DB persistence
+    # ─────────────────────────────────────────────────────────────────────────
     def _save_booking_to_db(self) -> bool:
         """
-        Refactored to use shared service layer.
-        Ensures multi-seat booking and payment are recorded correctly.
+        Saves the booking to DB including promo_used from ctx.
         """
         try:
-            pax_data = self.ctx.get("passenger", {})
-            flight = self.ctx.get("flight", {})
-            pnr = self.ctx.get("pnr") or ("JJ" + "".join(random.choices(string.ascii_uppercase + string.digits, k=4)))
+            pax_data  = self.ctx.get("passenger", {})
+            flight    = self.ctx.get("flight", {})
+            pnr       = self.ctx.get("pnr") or ("JJ" + "".join(random.choices(string.ascii_uppercase + string.digits, k=4)))
             self.ctx["pnr"] = pnr
+            promo_used = self.ctx.get("promo_used")
 
-            # 0. Sync flight if mock
             fid = flight.get("fid", 1)
             if not sync_mock_flight_to_db(fid):
                 print(f"[Sync Error] Could not sync flight {fid} to database.")
                 return False
 
-            # 1. Create Passenger via service
-            # Ensure date_of_birth is present (NOT NULL in DB)
             dob = pax_data.get("dob")
             if not dob or dob == "DD/MM/YYYY":
-                dob = "1990-01-01" # Default placeholder
+                dob = "1990-01-01"
 
             success, msg, passenger_id = create_passenger(
                 full_name=pax_data.get("name"),
@@ -353,13 +417,9 @@ class BookingWindow(QMainWindow):
             if not success or not passenger_id:
                 print(f"[Service Error] create_passenger: {msg}"); return False
 
-            # 2. Bookings & Seat Reservations via services
             first_booking_id = None
             for i, seat_label in enumerate(self.ctx.get("seat_labels", [])):
-                # Generate unique PNR per passenger/seat row if multiple
                 unique_pnr = pnr if len(self.ctx.get("seat_labels", [])) == 1 else f"{pnr}-{i+1}"
-                
-                # Create booking record
                 success, msg, booking_id = create_booking(
                     booking_reference=unique_pnr,
                     passenger_id=passenger_id,
@@ -368,14 +428,13 @@ class BookingWindow(QMainWindow):
                     total_amount=self.ctx.get("total", 0),
                     payment_status="Paid",
                     booking_status="Confirmed",
-                    created_by=self.account.get("username")
+                    created_by=self.account.get("username"),
+                    promo_used=promo_used,
                 )
                 if not success:
                     print(f"[Service Error] create_booking: {msg}"); return False
-                
                 if first_booking_id is None: first_booking_id = booking_id
-                
-                # Reserve seat in seats table
+
                 success, msg = reserve_seat(
                     flight_id=fid,
                     seat_number=seat_label,
@@ -384,7 +443,6 @@ class BookingWindow(QMainWindow):
                 if not success:
                     print(f"[Service Error] reserve_seat: {msg}")
 
-            # 3. Record Payment via service
             if first_booking_id:
                 success, msg = create_payment(
                     booking_id=first_booking_id,
@@ -398,6 +456,7 @@ class BookingWindow(QMainWindow):
             return True
         except Exception as e:
             print(f"[Refactor Error] _save_booking_to_db: {e}"); return False
+
 
 if __name__ == "__main__":
     app = QApplication(sys.argv); app.setStyle("Fusion")

@@ -5,16 +5,18 @@ Giao diện Đăng Ký Kích Hoạt Hội Viên VIP
 """
 import sys
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtWidgets import QApplication, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLineEdit, QComboBox
+from PySide6.QtWidgets import QApplication, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLineEdit, QComboBox, QMessageBox
 from booking_app.ui.pages.booking_shared import (lbl, card_style, C_RED, C_RED2, C_DARK, C_WHITE, C_BG,
                              C_BORDER, C_TEXT, C_MID, C_GRAY, C_LGRAY)
 from booking_app.ui.promotion import get_footer
+from shared.services.account_service import set_is_activated
 
 class MembersPage(QWidget):
     register_success = Signal()
 
-    def __init__(self, parent=None):
+    def __init__(self, account: dict | None = None, parent=None):
         super().__init__(parent)
+        self._account = account or {}
         main_lay = QVBoxLayout(self)
         main_lay.setContentsMargins(0, 0, 0, 0)
         main_lay.setSpacing(0)
@@ -70,11 +72,27 @@ class MembersPage(QWidget):
             QPushButton {{ background:{C_RED}; color:{C_WHITE}; border:none; border-radius:8px; font-size:14px; font-weight:700; }}
             QPushButton:hover {{ background:{C_RED2}; }}
         """)
-        self.submit_btn.clicked.connect(self.register_success.emit)
+        self.submit_btn.clicked.connect(self._on_submit)
         form_lay.addWidget(self.submit_btn)
         
         # Thêm Footer vào đáy trang
         main_lay.addWidget(get_footer())
+
+    def set_account(self, account: dict):
+        """Update the linked account and pre-fill the name field."""
+        self._account = account
+        name = account.get("name") or account.get("full_name") or ""
+        self.txt_name.setText(name.upper())
+
+    def _on_submit(self):
+        """Persist is_activated = 1 to DB, then emit success signal."""
+        username = self._account.get("username", "")
+        if username:
+            ok = set_is_activated(username, 1)
+            if not ok:
+                QMessageBox.warning(self, "Lỗi", "Không thể cập nhật trạng thái hội viên. Vui lòng thử lại.")
+                return
+        self.register_success.emit()
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

@@ -48,6 +48,7 @@ def init_db():
             full_name TEXT,
             role TEXT NOT NULL DEFAULT 'customer',
             phone TEXT,
+            is_activated INTEGER DEFAULT 0,
             created_at TEXT DEFAULT CURRENT_TIMESTAMP,
             last_login TEXT
         )
@@ -114,6 +115,7 @@ def init_db():
             total_amount REAL,
             payment_status TEXT DEFAULT 'Pending',
             booking_status TEXT DEFAULT 'Pending',
+            promo_used TEXT DEFAULT NULL,
             booking_date TEXT DEFAULT CURRENT_TIMESTAMP,
             created_by TEXT,
             FOREIGN KEY(passenger_id)
@@ -305,10 +307,24 @@ def init_db():
         print("Username: admin")
         print("Password: admin123")
 
+    # =========================================================
+    # SAFE MIGRATIONS
+    # =========================================================
+    cursor.execute("PRAGMA table_info(accounts)")
+    accounts_cols = [row[1] for row in cursor.fetchall()]
+    if "is_activated" not in accounts_cols:
+        cursor.execute("ALTER TABLE accounts ADD COLUMN is_activated INTEGER DEFAULT 0")
+
+    cursor.execute("PRAGMA table_info(bookings)")
+    bookings_cols = [row[1] for row in cursor.fetchall()]
+    if "promo_used" not in bookings_cols:
+        cursor.execute("ALTER TABLE bookings ADD COLUMN promo_used TEXT DEFAULT NULL")
+
     conn.commit()
     conn.close()
 
     seed_flights()
+    _seed_passengers_and_accounts()
 
     print("\n✅ Database initialized successfully!")
     print("""
@@ -325,6 +341,90 @@ Tables created:
 - flight_logs
 - system_settings
 """)
+
+
+
+def _seed_passengers_and_accounts():
+    """
+    Inserts realistic Vietnamese passenger profiles and matching customer
+    accounts if they don't already exist. Covers all 4 spending tiers
+    with a mix of activated (is_activated=1) and non-activated accounts.
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    # ── 12 passenger profiles ─────────────────────────────────────────────────
+    # (full_name, gender, dob, nationality, phone, email, member_rank,
+    #  passport_number, total_spending)
+    passengers = [
+        ("Lê Văn Quân",        "Male",   "2007-11-19", "Vietnam", "0912345678",
+         "quanle@example.com",      "member",    "B12345678",  0.0),
+        ("Nguyễn Thị Thu Hà",  "Female", "1995-03-15", "Vietnam", "0908123456",
+         "thuha.nguyen@gmail.com",  "member",    "B23456789",  2750.0),
+        ("Trần Minh Khoa",     "Male",   "1988-07-22", "Vietnam", "0976543210",
+         "minhkhoa.tran@email.vn",  "member",    "B34567890",  4200.0),
+        ("Phạm Thị Lan Anh",   "Female", "1992-12-01", "Vietnam", "0934567890",
+         "lananh.pham@outlook.com", "member",    "B45678901",  1100.0),
+        ("Hoàng Đức Thắng",    "Male",   "1985-05-30", "Vietnam", "0967890123",
+         "thang.hoang@company.vn",  "member",    "B56789012",  3600.0),
+        ("Vũ Thị Mỹ Linh",     "Female", "2000-09-10", "Vietnam", "0945678901",
+         "mylinh.vu@gmail.com",     "member",    "B67890123",  320.0),
+        ("Đặng Quốc Bảo",      "Male",   "1979-01-25", "Vietnam", "0923456789",
+         "quocbao.dang@vip.vn",     "member",    "B78901234",  5100.0),
+        ("Bùi Thị Hồng Nhung", "Female", "1997-06-18", "Vietnam", "0956789012",
+         "hongnhung.bui@gmail.com", "member",    "B89012345",  870.0),
+        ("Lý Thành Trung",     "Male",   "1983-11-05", "Vietnam", "0912567890",
+         "thanhtung.ly@email.vn",   "member",    "B90123456",  1800.0),
+        ("Ngô Thị Bích Phượng","Female", "2002-04-14", "Vietnam", "0978901234",
+         "bichphuong.ngo@gmail.com","member",    "B01234567",  450.0),
+        ("Đinh Văn Hùng",      "Male",   "1975-08-28", "Vietnam", "0901234567",
+         "vanhung.dinh@corp.vn",    "member",    "C12345678",  2200.0),
+        ("Phan Thị Diệu Linh", "Female", "1999-02-11", "Vietnam", "0965432109",
+         "dieulinh.phan@gmail.com", "member",    "C23456789",  680.0),
+    ]
+
+    # Matching customer accounts
+    # (username, email, full_name, password, is_activated)
+    accounts = [
+        ("quanlv",      "quanle@example.com",       "Lê Văn Quân",        "jetjet123", 0),
+        ("thuha95",     "thuha.nguyen@gmail.com",   "Nguyễn Thị Thu Hà",  "jetjet123", 1),
+        ("minhkhoa88",  "minhkhoa.tran@email.vn",   "Trần Minh Khoa",     "jetjet123", 1),
+        ("lananh92",    "lananh.pham@outlook.com",  "Phạm Thị Lan Anh",   "jetjet123", 1),
+        ("thang85",     "thang.hoang@company.vn",   "Hoàng Đức Thắng",    "jetjet123", 1),
+        ("mylinh00",    "mylinh.vu@gmail.com",       "Vũ Thị Mỹ Linh",    "jetjet123", 0),
+        ("quocbao79",   "quocbao.dang@vip.vn",       "Đặng Quốc Bảo",     "jetjet123", 1),
+        ("hongnhung97", "hongnhung.bui@gmail.com",  "Bùi Thị Hồng Nhung", "jetjet123", 0),
+        ("thanhtung83", "thanhtung.ly@email.vn",    "Lý Thành Trung",     "jetjet123", 1),
+        ("bichphuong02","bichphuong.ngo@gmail.com", "Ngô Thị Bích Phượng","jetjet123", 0),
+        ("vanhung75",   "vanhung.dinh@corp.vn",     "Đinh Văn Hùng",      "jetjet123", 1),
+        ("dieulinh99",  "dieulinh.phan@gmail.com",  "Phan Thị Diệu Linh", "jetjet123", 0),
+    ]
+
+    try:
+        # Insert passengers (skip duplicates by passport_number)
+        for p in passengers:
+            cursor.execute("""
+                INSERT OR IGNORE INTO passengers
+                    (full_name, gender, date_of_birth, nationality, phone, email,
+                     member_rank, passport_number, total_spending)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, p)
+
+        # Insert customer accounts (skip duplicates by username)
+        for (uname, email, fname, pwd, activated) in accounts:
+            ph = hashlib.sha256(pwd.encode()).hexdigest()
+            cursor.execute("""
+                INSERT OR IGNORE INTO accounts
+                    (username, email, password_hash, full_name, role, is_activated)
+                VALUES (?, ?, ?, ?, 'customer', ?)
+            """, (uname, email, ph, fname, activated))
+
+        conn.commit()
+        print("✅ Passenger seed data inserted/verified.")
+    except Exception as e:
+        print(f"⚠️  Seed error: {e}")
+    finally:
+        conn.close()
 
 
 if __name__ == "__main__":
