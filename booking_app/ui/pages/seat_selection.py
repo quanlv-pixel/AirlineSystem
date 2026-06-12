@@ -21,7 +21,7 @@ from booking_app.ui.pages.booking_shared import (lbl, h_sep, card_style, red_btn
                              C_LGRAY, C_GREEN, C_ORANGE)
 
 SEAT_PRICE = 25          # USD / ghế
-MAX_SEATS  = 6           # số ghế tối đa có thể chọn
+MAX_SEATS  = 1           # Strict: 1 seat per checkout to prevent multi-row DB duplicates
 COLS       = ["A","B","C","D","E","F"]
 
 # Fallback data ONLY for database errors

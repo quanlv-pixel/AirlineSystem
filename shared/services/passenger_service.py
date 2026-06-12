@@ -199,13 +199,15 @@ def update_spending(
     passenger_id: int,
     amount: float
 ):
-
+    """Atomically add *amount* to the passenger's total_spending.
+    COALESCE guards against a NULL baseline (new passengers have NULL spending).
+    """
     conn = connect_db()
     cursor = conn.cursor()
 
     cursor.execute("""
         UPDATE passengers
-        SET total_spending = total_spending + ?
+        SET total_spending = COALESCE(total_spending, 0) + ?
         WHERE passenger_id = ?
     """, (
         amount,

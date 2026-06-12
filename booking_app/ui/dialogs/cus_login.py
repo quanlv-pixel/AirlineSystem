@@ -103,11 +103,11 @@ class LoginWindow(QMainWindow):
         self.error_label.setAlignment(Qt.AlignCenter)
         self.error_label.setStyleSheet("color: #E53935; font-size: 12px;")
 
-        login_btn = QPushButton("ĐĂNG NHẬP")
-        login_btn.setFixedHeight(54)
-        login_btn.setCursor(Qt.PointingHandCursor)
-        login_btn.setStyleSheet(f"QPushButton {{ background: {RED_PRIMARY}; color: white; border-radius: 12px; font-weight: 800; font-size: 14px; margin-top: 10px; }} QPushButton:hover {{ background: #D32F2F; }}")
-        login_btn.clicked.connect(self._handle_login)
+        self.login_btn = QPushButton("ĐĂNG NHẬP")
+        self.login_btn.setFixedHeight(54)
+        self.login_btn.setCursor(Qt.PointingHandCursor)
+        self.login_btn.setStyleSheet(f"QPushButton {{ background: {RED_PRIMARY}; color: white; border-radius: 12px; font-weight: 800; font-size: 14px; margin-top: 10px; }} QPushButton:hover {{ background: #D32F2F; }}")
+        self.login_btn.clicked.connect(self._handle_login)
 
         # Nút chuyển sang Đăng ký
         register_btn = QPushButton("Chưa có tài khoản? Đăng ký ngay")
@@ -122,7 +122,7 @@ class LoginWindow(QMainWindow):
         card_layout.addWidget(self.email_input)
         card_layout.addWidget(self.pwd_input)
         card_layout.addWidget(self.error_label)
-        card_layout.addWidget(login_btn)
+        card_layout.addWidget(self.login_btn)
         card_layout.addWidget(register_btn)
 
         layout.addWidget(self.card)
@@ -132,17 +132,26 @@ class LoginWindow(QMainWindow):
         self.move((screen.width() - self.width()) // 2, (screen.height() - self.height()) // 2)
 
     def _handle_login(self):
+        # Immediately disable to block any double-click from re-emitting login_success
+        self.login_btn.setEnabled(False)
+        self.login_btn.setText("ĐANG XỬ LÝ...")
+
         email = self.email_input.text().strip()
         pwd = self.pwd_input.text().strip()
         if not email or not pwd:
             self.error_label.setText("Vui lòng nhập đầy đủ thông tin")
+            self.login_btn.setEnabled(True)
+            self.login_btn.setText("ĐĂNG NHẬP")
             return
-        
+
         account = _db_login(email, pwd)
         if account:
+            # Keep button disabled — window will close shortly after signal fires
             self.login_success.emit(account)
         else:
             self.error_label.setText("Email hoặc mật khẩu không chính xác")
+            self.login_btn.setEnabled(True)
+            self.login_btn.setText("ĐĂNG NHẬP")
 
 def _hash(p): return hashlib.sha256(p.encode()).hexdigest()
 

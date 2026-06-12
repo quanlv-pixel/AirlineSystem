@@ -39,14 +39,20 @@ class AppController:
 
     def show_booking_app(self, account_data):
         """Đăng nhập thành công, mở giao diện đặt vé chính"""
+        # Guard: if a BookingWindow is already open, ignore duplicate signal emissions
+        # (can happen on rapid double-click before the button-disable propagates)
+        if self.main_win is not None:
+            return
+
         print(f"--- Welcome {account_data.get('full_name')} ---")
-        
+
         if self.login_win:
             self.login_win.close()
-            
+
         # Khởi tạo cửa sổ chính từ booking_window.py
         self.main_win = BookingWindow(account=account_data)
         self.main_win.show()
+
 
 def main():
     app = QApplication(sys.argv)
