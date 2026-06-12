@@ -9,7 +9,7 @@ from shared.services.passenger_service import (
     get_all_passengers_enriched,
     search_passengers_enriched,
 )
-from shared.services.member_service import get_tier_for_spending, get_user_spending_from_db
+from shared.services.member_service import get_tier_for_spending
 
 # ── Màu sắc ──────────────────────────────────────────────────────────────────
 RED       = "#E53935"
@@ -39,9 +39,6 @@ _TIER_BADGE = {
     "HẠNG BẠC":   ("#4A5568", "#E2E8F0", "Bạc badge — silver"),
     "THÀNH VIÊN": ("#065F46", "#D1FAE5", "Thành viên badge — green"),
 }
-
-# Active session username for live spending (matches seeded account)
-SESSION_USERNAME = "quanlv"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -146,10 +143,8 @@ class MemberRow(QWidget):
         name_l.setContentsMargins(0, 0, 0, 0); name_l.setSpacing(3)
         name_l.setAlignment(Qt.AlignVCenter)
 
-        # Live spending for the session user; static for others
+        # Always use the live DB spending for every passenger
         display_spending = passenger.total_spending
-        if getattr(passenger, '_is_session_user', False):
-            display_spending = get_user_spending_from_db(SESSION_USERNAME)
 
         name_lbl = QLabel(passenger.full_name or "—")
         name_lbl.setStyleSheet(f"font-size:14px; font-weight:700; color:{TEXT_DARK};")
@@ -444,12 +439,8 @@ class PassengerPage(QWidget):
         self.load_passengers()
 
     def load_passengers(self):
-
         MemberRow._instance_count = 0
         passengers = get_all_passengers_enriched()
-        # Mark the session user row for live spending
-        for p in passengers:
-            p._is_session_user = (p.email and "quanle@example.com" in p.email.lower())
         self.render_rows(passengers)
 
     def render_rows(self, passengers):
@@ -478,6 +469,4 @@ class PassengerPage(QWidget):
             passengers = get_all_passengers_enriched()
         else:
             passengers = search_passengers_enriched(keyword)
-        for p in passengers:
-            p._is_session_user = (p.email and "quanle@example.com" in p.email.lower())
         self.render_rows(passengers)

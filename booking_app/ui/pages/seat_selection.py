@@ -391,40 +391,52 @@ class SeatMapPage(QWidget):
         )
 
     def _get_occupied_seats(self, flight_id: int | None) -> set[tuple[int, str]]:
-        # 1. Thử lấy từ DB trước
+        """
+        Build the full occupied-seat set for the seat map.
+
+        Strategy:
+        1. Fetch ACTUAL reserved seats from the DB via get_seats_by_flight().
+        2. Calculate how many seats SHOULD look occupied based on the flight's
+           occupancy percentage (drawn from ctx), spread across ~210 seats.
+        3. Use random.Random(flight_id) for a *deterministic* fake-occupancy
+           pattern so the map looks identical on every load for the same flight.
+        4. Merge the fake set with the real DB set and return the union.
+        """
+        TOTAL_SEATS = 35 * 6  # 35 rows × 6 cols = 210 seats
+
+        # ── Step 1: real reserved seats from DB ──────────────────────────────
+        db_occ: set[tuple[int, str]] = set()
         if flight_id is not None:
             try:
                 from shared.services.seat_service import get_seats_by_flight
                 seats = get_seats_by_flight(flight_id)
                 if seats is not None:
-                    occ = set()
                     for s in seats:
                         if s.is_reserved:
                             match = re.match(r"(\d+)([A-F])", s.seat_number)
                             if match:
-                                occ.add((int(match.group(1)), match.group(2)))
-                    # Nếu DB trả về dữ liệu (kể cả rỗng) → tin tưởng DB
-                    return occ
-            except ImportError:
-                pass
+                                db_occ.add((int(match.group(1)), match.group(2)))
             except Exception as e:
                 print(f"[SeatMap] DB error: {e}")
 
-        # 2. Dùng mock_api với occupancy_percent từ flight context
-        try:
-            from shared.api.mock_api import get_mock_seat_map
-            reserved_labels = get_mock_seat_map(flight_id or 0)
-            occ = set()
-            for label in reserved_labels:
-                match = re.match(r"(\d+)([A-F])", label)
-                if match:
-                    occ.add((int(match.group(1)), match.group(2)))
-            return occ
-        except Exception as e:
-            print(f"[SeatMap] mock_api error: {e}")
+        # ── Step 2: determine target occupancy count ──────────────────────────
+        flight_info = self.ctx.get("flight", {}) or {}
+        occupancy_pct = flight_info.get("occupancy_percent", 0)
+        target_occupied = int(TOTAL_SEATS * occupancy_pct / 100)
 
-        # 3. Cuối cùng mới dùng hardcoded fallback
-        return OCCUPIED_FALLBACK
+        # ── Step 3: deterministic fake-occupied set seeded by flight_id ───────
+        fake_occ: set[tuple[int, str]] = set()
+        if flight_id is not None and target_occupied > 0:
+            rng = random.Random(flight_id)
+            all_seats = [(r, c) for r in range(1, 36) for c in COLS]
+            rng.shuffle(all_seats)
+            for seat in all_seats:
+                if len(fake_occ) >= target_occupied:
+                    break
+                fake_occ.add(seat)
+
+        # ── Step 4: merge fake + real ─────────────────────────────────────────
+        return fake_occ | db_occ
 
     def _on_toggle(self, row: int, col: str, selected: bool):
         if selected:

@@ -256,6 +256,7 @@ class PaymentPage(QWidget):
     def __init__(self, ctx: dict | None = None, parent=None):
         super().__init__(parent)
         self.ctx = ctx or {}
+        self._is_paying: bool = False  # guard against double-click opening multiple SSLDialogs
         self.setStyleSheet(f"background:{C_BG};")
         root = QVBoxLayout(self)
         root.setContentsMargins(28, 24, 28, 28)
@@ -321,15 +322,22 @@ class PaymentPage(QWidget):
         self.qr_widget.update()
 
     def _on_pay(self):
-        total = self.ctx.get("total", 0)
-        dlg = SSLDialog(total, self)
-        # Qt.SingleShotConnection ensures the slot fires at most once per dialog,
-        # preventing double create_booking() calls if the dialog is re-shown.
-        dlg.payment_complete.connect(
-            lambda: self.payment_complete.emit(self.ctx),
-            Qt.SingleShotConnection
-        )
-        dlg.exec()
+        # Prevent multiple SSLDialog instances from opening on rapid/double-click
+        if self._is_paying:
+            return
+        self._is_paying = True
+        try:
+            total = self.ctx.get("total", 0)
+            dlg = SSLDialog(total, self)
+            # Qt.SingleShotConnection ensures the slot fires at most once per dialog,
+            # preventing double create_booking() calls if the dialog is re-shown.
+            dlg.payment_complete.connect(
+                lambda: self.payment_complete.emit(self.ctx),
+                Qt.SingleShotConnection
+            )
+            dlg.exec()
+        finally:
+            self._is_paying = False
 
 
 

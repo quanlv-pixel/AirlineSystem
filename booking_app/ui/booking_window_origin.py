@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (
 
 # Centralized Services
 from shared.services.flight_service import get_all_flights, sync_mock_flight_to_db
-from shared.services.passenger_service import create_passenger
+from shared.services.passenger_service import create_passenger, update_spending
 from shared.services.booking_service import create_booking
 from shared.services.seat_service import reserve_seat
 from shared.services.payment_service import create_payment
@@ -126,37 +126,48 @@ class FlightsPage(QWidget):
             if child.widget(): child.widget().deleteLater()
 
         try:
-            from shared.api.mock_api import MOCK_FLIGHTS, STATUSES_NOT_BOOKABLE
+            db_flights = get_all_flights()
             flights = []
-            for f in MOCK_FLIGHTS:
-                status    = f.get("status", "Scheduled")
-                occupancy = f.get("occupancy_percent", 0)
-                if status in STATUSES_NOT_BOOKABLE: continue
-                if occupancy >= 95:                 continue
+            for f in db_flights:
+                status = (f.status or "").strip()
+                # Only show Scheduled flights
+                if status.lower() != "scheduled":
+                    continue
+                total_seats     = f.total_seats or 1
+                available_seats = f.available_seats or 0
+                occupancy = int((1 - available_seats / total_seats) * 100)
+                # Exclude near-full flights (>= 90% occupied)
+                if occupancy >= 90:
+                    continue
+                dep_t = str(f.departure_time)[11:16] if f.departure_time else "--:--"
+                arr_t = str(f.arrival_time)[11:16]   if f.arrival_time   else "--:--"
                 flights.append({
-                    "fid":      f["flight_id"],
-                    "flight_id":f["flight_id"],
-                    "code":     f["flight_number"],
-                    "aircraft": f.get("aircraft", "—"),
-                    "dep":      f["departure"][:3].upper(),
-                    "dst":      f["destination"][:3].upper(),
-                    "dep_t":    str(f["departure_time"])[11:16],
-                    "arr_t":    str(f["arrival_time"])[11:16],
-                    "dur":      "—",
-                    "price":    int(f.get("ticket_price", 0)),
-                    "status":   status,
+                    "fid":               f.flight_id,
+                    "flight_id":         f.flight_id,
+                    "code":              f.flight_number or "N/A",
+                    "aircraft":          f.aircraft or "—",
+                    "dep":               (f.departure  or "")[:3].upper(),
+                    "dst":               (f.destination or "")[:3].upper(),
+                    "dep_t":             dep_t,
+                    "arr_t":             arr_t,
+                    "dur":               "—",
+                    "price":             int(f.ticket_price or 0),
+                    "status":            status,
                     "occupancy_percent": occupancy,
                 })
-            if not flights:
-                flights = [
-                    {"fid":1,"flight_id":1,"code":"JJ201","aircraft":"AIRBUS A321 NEO",
-                     "dep":"HAN","dst":"SGN","dep_t":"09:00","arr_t":"11:15",
-                     "dur":"2H 15M","price":120,"status":"Scheduled","occupancy_percent":20},
-                ]
             for f in flights:
                 card = FlightCard(f)
                 card.selected.connect(self.flight_selected.emit)
                 self.list_layout.addWidget(card)
+            if not flights:
+                no_flights_lbl = __import__(
+                    "PySide6.QtWidgets", fromlist=["QLabel"]
+                ).QLabel("Không có chuyến bay nào khả dụng.")
+                no_flights_lbl.setAlignment(__import__(
+                    "PySide6.QtCore", fromlist=["Qt"]
+                ).Qt.AlignCenter)
+                no_flights_lbl.setStyleSheet("color:#9AA4B2;font-size:14px;padding:40px;")
+                self.list_layout.addWidget(no_flights_lbl)
         except Exception as e:
             print(f"[FlightsPage Error] {e}")
 
@@ -398,6 +409,9 @@ class BookingWindow(QMainWindow):
     def _save_booking_to_db(self) -> bool:
         """
         Saves the booking to DB including promo_used from ctx.
+        - Reuses existing passenger record if passport_number already exists
+          (prevents UniqueConstraint violations and duplicate passenger rows).
+        - Calls update_spending() after payment to permanently accumulate spend.
         """
         try:
             pax_data  = self.ctx.get("passenger", {})
@@ -407,25 +421,46 @@ class BookingWindow(QMainWindow):
             promo_used = self.ctx.get("promo_used")
 
             fid = flight.get("fid", 1)
-            if not sync_mock_flight_to_db(fid):
-                print(f"[Sync Error] Could not sync flight {fid} to database.")
-                return False
+            # Flights from DB don't need sync — only needed for legacy mock IDs
+            from shared.services.flight_service import get_flight_by_id
+            if not get_flight_by_id(fid):
+                if not sync_mock_flight_to_db(fid):
+                    print(f"[Sync Error] Could not sync flight {fid} to database.")
+                    return False
 
             dob = pax_data.get("dob")
             if not dob or dob == "DD/MM/YYYY":
                 dob = "1990-01-01"
 
-            success, msg, passenger_id = create_passenger(
-                full_name=pax_data.get("name"),
-                gender=pax_data.get("gender", "N/A"),
-                date_of_birth=dob,
-                phone=pax_data.get("phone"),
-                passport_number=pax_data.get("passport"),
-                email=pax_data.get("email"),
-                nationality=pax_data.get("nationality", "Vietnam")
-            )
-            if not success or not passenger_id:
-                print(f"[Service Error] create_passenger: {msg}"); return False
+            # ── Unique-passport guard: reuse existing passenger if found ────────
+            passport = pax_data.get("passport")
+            passenger_id: int | None = None
+            if passport:
+                from database.db import get_connection as _db_conn
+                _c = _db_conn()
+                try:
+                    row = _c.execute(
+                        "SELECT passenger_id FROM passengers WHERE passport_number = ? LIMIT 1",
+                        (passport,)
+                    ).fetchone()
+                    if row:
+                        passenger_id = row[0]
+                        print(f"[Booking] Reusing existing passenger_id={passenger_id} for passport {passport}")
+                finally:
+                    _c.close()
+
+            if passenger_id is None:
+                success, msg, passenger_id = create_passenger(
+                    full_name=pax_data.get("name"),
+                    gender=pax_data.get("gender", "N/A"),
+                    date_of_birth=dob,
+                    phone=pax_data.get("phone"),
+                    passport_number=passport,
+                    email=pax_data.get("email"),
+                    nationality=pax_data.get("nationality", "Vietnam")
+                )
+                if not success or not passenger_id:
+                    print(f"[Service Error] create_passenger: {msg}"); return False
 
             first_booking_id = None
             # Deduplicate seat labels (preserve order) to prevent double-booking
@@ -470,6 +505,9 @@ class BookingWindow(QMainWindow):
                 )
                 if not success:
                     print(f"[Service Error] create_payment: {msg}")
+
+            # ── Accumulate spending in the passenger's DB record ───────────────
+            update_spending(passenger_id, self.ctx.get("total", 0))
 
             return True
         except Exception as e:
