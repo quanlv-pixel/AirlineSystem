@@ -111,18 +111,29 @@ class PaymentSummaryCard(QWidget):
         )
         self._root.addSpacing(20)
 
-        base = ctx.get("base_price", 0)
-        seat_fee = ctx.get("seat_fee", 0)
-        tax = ctx.get("tax", 45)
-        fee = ctx.get("fee", 12)
+        ticket_count = ctx.get("ticket_count", 1)
+        base_unit = ctx.get("base_price", 0)
+        seat_fee  = ctx.get("seat_fee", 0)
+        tax_unit  = ctx.get("tax", 45)
+        fee_unit  = ctx.get("fee", 12)
 
-        ctx["total"] = base + seat_fee + tax + fee
+        # Multiply per-ticket amounts by the number of tickets
+        base = base_unit * ticket_count
+        tax  = tax_unit  * ticket_count
+        fee  = fee_unit  * ticket_count
+        # seat_fee is already the sum of all selected seats (SEAT_PRICE * n_seats)
+
+        grand_total = base + seat_fee + tax + fee
+        ctx["total"] = grand_total
+
+        # Build label suffixes
+        suffix = f" (x{ticket_count})" if ticket_count > 1 else ""
 
         for title, amount in [
-            ("Giá vé máy bay", f"${base}"),
+            (f"Giá vé máy bay{suffix}", f"${base}"),
             ("Phí chọn ghế", f"${seat_fee}"),
-            ("Thuế & Phí sân bay", f"${tax}"),
-            ("Phí quản trị hệ thống", f"${fee}")
+            (f"Thuế & Phí sân bay{suffix}", f"${tax}"),
+            (f"Phí quản trị hệ thống{suffix}", f"${fee}"),
         ]:
             row = QHBoxLayout()
             row.addWidget(lbl(title, 13, 400, C_MID))

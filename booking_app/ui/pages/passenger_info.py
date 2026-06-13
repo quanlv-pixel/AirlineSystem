@@ -9,7 +9,7 @@ import sys
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QLabel, QPushButton, QFrame, QScrollArea, QLineEdit, QComboBox
+    QLabel, QPushButton, QFrame, QScrollArea, QLineEdit, QComboBox, QSpinBox
 )
 from booking_app.ui.pages.booking_shared import (lbl, h_sep, card_style, red_btn, page_header,
                              NavBar, C_RED, C_DARK, C_WHITE, C_BG,
@@ -66,11 +66,46 @@ class BookingSummaryCard(QWidget):
         def _status_row(key, val, val_color=C_TEXT):
             r = QHBoxLayout(); r.addWidget(lbl(key, 12, 500, C_GRAY)); r.addStretch(); r.addWidget(lbl(val, 12, 700, val_color)); return r
         root.addLayout(_status_row("Trạng thái ghế", "ĐANG CHỜ CHỌN", C_ORANGE)); root.addSpacing(12)
-        root.addLayout(_status_row("Hành lý dự kiến", "7KG XÁCH TAY", C_TEXT)); root.addSpacing(20)
-        root.addWidget(h_sep()); root.addSpacing(20)
+        root.addLayout(_status_row("Hành lý dự kiến", "7KG XÁCH TAY", C_TEXT)); root.addSpacing(16)
+        root.addWidget(h_sep()); root.addSpacing(16)
+        # ── Ticket quantity selector ──────────────────────────────────────────
+        qty_lbl = lbl("SỐ LƯỢNG VÉ", 11, 600, C_GRAY, 0.5)
+        root.addWidget(qty_lbl); root.addSpacing(8)
+        self._qty_spin = QSpinBox()
+        self._qty_spin.setRange(1, 6)
+        self._qty_spin.setValue(1)
+        self._qty_spin.setFixedHeight(46)
+        self._qty_spin.setStyleSheet(f"""
+            QSpinBox {{
+                background:{C_LGRAY}; border:1.5px solid {C_BORDER}; border-radius:12px;
+                font-size:14px; font-weight:700; color:{C_TEXT}; padding:0 16px;
+            }}
+            QSpinBox:focus {{ border-color:{C_RED}; background:{C_WHITE}; }}
+            QSpinBox::up-button, QSpinBox::down-button {{
+                width:32px; border:none; border-radius:8px;
+                background:{C_LGRAY};
+            }}
+            QSpinBox::up-button:hover, QSpinBox::down-button:hover {{
+                background:#FFCDD2;
+            }}
+            QSpinBox::up-arrow {{
+                border-left:5px solid transparent; border-right:5px solid transparent;
+                border-bottom:6px solid {C_GRAY}; width:0; height:0;
+            }}
+            QSpinBox::down-arrow {{
+                border-left:5px solid transparent; border-right:5px solid transparent;
+                border-top:6px solid {C_GRAY}; width:0; height:0;
+            }}
+        """)
+        root.addWidget(self._qty_spin); root.addSpacing(20)
+        # ─────────────────────────────────────────────────────────────────────
         self.err_lbl = QLabel(""); self.err_lbl.setAlignment(Qt.AlignCenter)
         self.err_lbl.setStyleSheet(f"color: {C_RED}; font-size: 12px; font-weight: bold;"); root.addWidget(self.err_lbl)
         root.addSpacing(10); btn = red_btn("TIẾP TỤC CHỌN GHẾ  →", 52); btn.clicked.connect(self.proceed); root.addWidget(btn); root.addStretch()
+
+    def ticket_count(self) -> int:
+        """Return the currently selected ticket quantity."""
+        return self._qty_spin.value()
 
 class PassengerInfoPage(QWidget):
     proceed = Signal(dict)
@@ -119,7 +154,9 @@ class PassengerInfoPage(QWidget):
         if not name or not passport or not phone: self._summary.err_lbl.setText("Vui lòng điền đủ Tên, CCCD và SĐT!"); return
         self._summary.err_lbl.setText("")
         pax = dict(name=name, dob=self._dob.text() or "DD/MM/YYYY", gender=self._gender.currentText(), nationality=self._nationality.text() or "Việt Nam", passport=passport, email=self._email.text(), phone=phone)
-        self.ctx["passenger"] = pax; self.proceed.emit(self.ctx)
+        self.ctx["passenger"] = pax
+        self.ctx["ticket_count"] = self._summary.ticket_count()
+        self.proceed.emit(self.ctx)
 
 if __name__ == "__main__":
     app = QApplication(sys.argv); app.setStyle("Fusion")

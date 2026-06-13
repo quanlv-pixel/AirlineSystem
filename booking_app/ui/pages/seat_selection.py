@@ -21,7 +21,6 @@ from booking_app.ui.pages.booking_shared import (lbl, h_sep, card_style, red_btn
                              C_LGRAY, C_GREEN, C_ORANGE)
 
 SEAT_PRICE = 25          # USD / ghế
-MAX_SEATS  = 1           # Strict: 1 seat per checkout to prevent multi-row DB duplicates
 COLS       = ["A","B","C","D","E","F"]
 
 # Fallback data ONLY for database errors
@@ -179,8 +178,9 @@ class SelectedPanel(QWidget):
     confirm  = Signal(list)
     deselect = Signal(int, str)
 
-    def __init__(self, parent=None):
+    def __init__(self, target_seats: int = 1, parent=None):
         super().__init__(parent)
+        self._target_seats = max(1, target_seats)
         self.setStyleSheet(card_style(20))
         self._items: dict[tuple, SelectedItem] = {}
 
@@ -189,7 +189,10 @@ class SelectedPanel(QWidget):
         self._root.setSpacing(0)
 
         self._root.addWidget(lbl("Ghế đã chọn", 18, 800, C_TEXT))
-        self._root.addSpacing(16)
+        self._root.addSpacing(4)
+        self._req_lbl = lbl(f"Chọn đúng {self._target_seats} ghế để tiếp tục", 12, 500, C_ORANGE)
+        self._root.addWidget(self._req_lbl)
+        self._root.addSpacing(12)
 
         self._list_w = QWidget(); self._list_w.setStyleSheet("background:transparent;")
         self._list_l = QVBoxLayout(self._list_w)
@@ -227,9 +230,15 @@ class SelectedPanel(QWidget):
         self._root.addWidget(warn)
         self._root.addStretch()
 
+    def set_target_seats(self, target: int):
+        """Update the required seat count (called when ctx changes)."""
+        self._target_seats = max(1, target)
+        self._req_lbl.setText(f"Chọn đúng {self._target_seats} ghế để tiếp tục")
+        self._refresh_total()
+
     def add_seat(self, row: int, col: str):
         key = (row, col)
-        if key in self._items or len(self._items) >= MAX_SEATS: return
+        if key in self._items or len(self._items) >= self._target_seats: return
         self._ph.hide()
         item = SelectedItem(row, col, SEAT_PRICE)
         item.removed.connect(self.remove_seat)
@@ -260,7 +269,12 @@ class SelectedPanel(QWidget):
     def _refresh_total(self):
         total = len(self._items) * SEAT_PRICE
         self._total_lbl.setText(f"${total}")
-        self._confirm_btn.setEnabled(len(self._items) > 0)
+        # Proceed only when EXACTLY the required number of seats are selected
+        exact = (len(self._items) == self._target_seats)
+        self._confirm_btn.setEnabled(exact)
+        # Update hint label colour
+        color = C_GREEN if exact else C_ORANGE
+        self._req_lbl.setStyleSheet(f"font-size:12px; font-weight:500; color:{color};")
 
     def selected_seats(self) -> list[tuple[int,str]]:
         return list(self._items.keys())
@@ -363,7 +377,8 @@ class SeatMapPage(QWidget):
 
         right_w = QWidget(); right_w.setStyleSheet("background:transparent;")
         rl = QVBoxLayout(right_w); rl.setContentsMargins(0,0,0,0)
-        self._panel = SelectedPanel()
+        target_seats = self.ctx.get("ticket_count", 1)
+        self._panel = SelectedPanel(target_seats=target_seats)
         self._panel.confirm.connect(self._on_confirm)
         self._panel.deselect.connect(self._on_panel_deselect)
         rl.addWidget(self._panel); rl.addStretch()
@@ -380,6 +395,10 @@ class SeatMapPage(QWidget):
                 flight_info.get("flight_id")
                 or flight_info.get("fid")
             )
+
+        # Sync the required seat count from context each time this page is shown
+        target_seats = self.ctx.get("ticket_count", 1)
+        self._panel.set_target_seats(target_seats)
 
         self._panel.clear()
 
@@ -439,8 +458,10 @@ class SeatMapPage(QWidget):
         return fake_occ | db_occ
 
     def _on_toggle(self, row: int, col: str, selected: bool):
+        target_seats = self.ctx.get("ticket_count", 1)
         if selected:
-            if len(self._panel.selected_seats()) >= MAX_SEATS:
+            if len(self._panel.selected_seats()) >= target_seats:
+                # Already at limit — revert the visual state
                 self._map.update_map(
                     self._occupied,
                     set(self._panel.selected_seats())

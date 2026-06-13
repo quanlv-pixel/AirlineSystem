@@ -471,6 +471,10 @@ class BookingWindow(QMainWindow):
                     seen_seats.add(sl)
                     unique_seats.append(sl)
 
+            # Divide grand total equally across seats so revenue stats aren't inflated
+            grand_total = self.ctx.get("total", 0)
+            per_ticket_price = grand_total / max(1, len(unique_seats))
+
             for i, seat_label in enumerate(unique_seats):
                 unique_pnr = pnr if len(unique_seats) == 1 else f"{pnr}-{i+1}"
                 success, msg, booking_id = create_booking(
@@ -478,7 +482,7 @@ class BookingWindow(QMainWindow):
                     passenger_id=passenger_id,
                     flight_id=fid,
                     seat_number=seat_label,
-                    total_amount=self.ctx.get("total", 0),
+                    total_amount=per_ticket_price,
                     payment_status="Paid",
                     booking_status="Confirmed",
                     created_by=self.account.get("username"),
@@ -497,17 +501,18 @@ class BookingWindow(QMainWindow):
                     print(f"[Service Error] reserve_seat: {msg}")
 
             if first_booking_id:
+                # create_payment uses the FULL grand total for accurate payment record
                 success, msg = create_payment(
                     booking_id=first_booking_id,
                     payment_method="Card",
-                    amount=self.ctx.get("total", 0),
+                    amount=grand_total,
                     transaction_code=pnr + "-TX"
                 )
                 if not success:
                     print(f"[Service Error] create_payment: {msg}")
 
-            # ── Accumulate spending in the passenger's DB record ───────────────
-            update_spending(passenger_id, self.ctx.get("total", 0))
+            # update_spending uses the FULL grand total for VIP tier accumulation
+            update_spending(passenger_id, grand_total)
 
             return True
         except Exception as e:
