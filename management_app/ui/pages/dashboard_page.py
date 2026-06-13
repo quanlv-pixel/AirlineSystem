@@ -24,6 +24,7 @@ from shared.services.booking_service import (
     get_active_bookings_count,
     get_total_revenue,
 )
+from database.db import get_connection
 
 # ── Màu sắc ──────────────────────────────────────────────────────────────────
 RED       = "#E53935"
@@ -103,16 +104,20 @@ class StatCard(QWidget):
             font-weight: 700;
         """)
 
-        # Giá trị
-        value_lbl = QLabel(str(value))
-        value_lbl.setStyleSheet(f"""
+        # Giá trị — stored as instance attr so refresh() can update it
+        self._value_lbl = QLabel(str(value))
+        self._value_lbl.setStyleSheet(f"""
             font-size: 30px;
             font-weight: 800;
             color: {TEXT_DARK};
         """)
 
         root.addWidget(title_lbl)
-        root.addWidget(value_lbl)
+        root.addWidget(self._value_lbl)
+
+    def set_value(self, new_value):
+        """Update the displayed value without rebuilding the card."""
+        self._value_lbl.setText(str(new_value))
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -270,6 +275,35 @@ class RouteItem(QWidget):
 # ─────────────────────────────────────────────────────────────────────────────
 # Routes Panel
 # ─────────────────────────────────────────────────────────────────────────────
+ROUTE_COLORS = [RED, "#1E88E5", "#8E24AA", "#5E35B1"]
+
+
+def _fetch_top_routes(limit: int = 4):
+    """
+    Query the DB for the most-booked departure → destination pairs.
+    Returns a list of dicts: {route, count}.
+    """
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT f.departure, f.destination, COUNT(b.booking_id) AS cnt
+            FROM bookings b
+            JOIN flights f ON b.flight_id = f.flight_id
+            WHERE b.booking_status IN ('Confirmed', 'Paid')
+            GROUP BY f.departure, f.destination
+            ORDER BY cnt DESC
+            LIMIT ?
+        """, (limit,))
+        rows = cursor.fetchall()
+        conn.close()
+        return [{"route": f"{(r[0] or '')[:3].upper()} -> {(r[1] or '')[:3].upper()}",
+                 "count": r[2]} for r in rows]
+    except Exception as e:
+        print(f"[RoutesPanel] DB error: {e}")
+        return []
+
+
 class RoutesPanel(QWidget):
     def __init__(self):
         super().__init__()
@@ -282,8 +316,8 @@ class RoutesPanel(QWidget):
             }}
         """)
 
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(22, 20, 22, 20)
+        self._outer = QVBoxLayout(self)
+        self._outer.setContentsMargins(22, 20, 22, 20)
 
         # Header
         header = QHBoxLayout()
@@ -298,21 +332,18 @@ class RoutesPanel(QWidget):
         header.addWidget(title)
         header.addStretch()
         header.addWidget(icon)
-        layout.addLayout(header)
-        layout.addSpacing(14)
+        self._outer.addLayout(header)
+        self._outer.addSpacing(14)
 
-        routes = [
-            ("SGN -> HAN", "Lưu lượng cao",       85, RED),
-            ("SGN -> DAD", "Cao điểm mùa vụ",     65, "#1E88E5"),
-            ("HAN -> PQC", "Nhu cầu nghỉ dưỡng",  45, "#8E24AA"),
-            ("DAD -> SGN", "Chuyến bay đêm",       30, "#5E35B1"),
-        ]
-        for route, label, pct, color in routes:
-            item = RouteItem(route, label, pct, color)
-            layout.addWidget(item)
-            layout.addSpacing(10)
+        # Placeholder container for route items (rebuilt on refresh)
+        self._routes_container = QWidget()
+        self._routes_container.setStyleSheet("background:transparent;")
+        self._routes_layout = QVBoxLayout(self._routes_container)
+        self._routes_layout.setContentsMargins(0, 0, 0, 0)
+        self._routes_layout.setSpacing(10)
+        self._outer.addWidget(self._routes_container)
 
-        layout.addStretch()
+        self._outer.addStretch()
 
         btn = QPushButton("BÁO CÁO TỐI ƯU HÓA")
         btn.setFixedHeight(40)
@@ -328,7 +359,44 @@ class RoutesPanel(QWidget):
             }}
             QPushButton:hover {{ background: #FFDADA; }}
         """)
-        layout.addWidget(btn)
+        self._outer.addWidget(btn)
+
+        # Build routes on first load
+        self._build_routes()
+
+    def _build_routes(self):
+        """Clear and re-render RouteItem widgets from DB data."""
+        # Remove all existing route items
+        while self._routes_layout.count():
+            child = self._routes_layout.takeAt(0)
+            if child.widget():
+                child.widget().deleteLater()
+
+        top_routes = _fetch_top_routes(4)
+        total_count = sum(r["count"] for r in top_routes) or 1
+
+        if top_routes:
+            for i, r in enumerate(top_routes):
+                pct = max(1, int(round(r["count"] / total_count * 100)))
+                color = ROUTE_COLORS[i % len(ROUTE_COLORS)]
+                label = f"{r['count']} booking{'s' if r['count'] != 1 else ''}"
+                item = RouteItem(r["route"], label, pct, color)
+                self._routes_layout.addWidget(item)
+        else:
+            # Fallback: static placeholder data when DB has no bookings yet
+            fallback = [
+                ("SGN -> HAN", "Lưu lượng cao",       85, RED),
+                ("SGN -> DAD", "Cao điểm mùa vụ",     65, "#1E88E5"),
+                ("HAN -> PQC", "Nhu cầu nghỉ dưỡng",  45, "#8E24AA"),
+                ("DAD -> SGN", "Chuyến bay đêm",       30, "#5E35B1"),
+            ]
+            for route, label, pct, color in fallback:
+                item = RouteItem(route, label, pct, color)
+                self._routes_layout.addWidget(item)
+
+    def refresh(self):
+        """Public method: re-query DB and re-render route items."""
+        self._build_routes()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -357,31 +425,56 @@ class DashboardPage(QWidget):
         layout.setSpacing(20)
 
         # Lấy dữ liệu từ Service Layer
-        try:
-            total_flights    = get_total_flights()
-            total_passengers = get_total_passengers()
-            active_bookings  = get_active_bookings_count()
-            total_revenue    = get_total_revenue()
-        except Exception:
-            total_flights, total_passengers = 42, 1280
-            active_bookings, total_revenue  = 854, 124500
-
+        tf, tp, ab, tr_ = self._fetch_stats()
+        total_flights    = tf
+        total_passengers = tp
+        active_bookings  = ab
+        total_revenue    = tr_
         revenue_text = f"${total_revenue/1000:.1f}k"
 
-        # ── 4 Stat Cards ─────────────────────────────────────────────────────
+        # ── 4 Stat Cards ──────────────────────────────────────────
         cards = QHBoxLayout()
         cards.setSpacing(16)
-        cards.addWidget(StatCard("Tổng số Chuyến bay",  total_flights,    "+12.5%", "✈",  "#1E88E5"))
-        cards.addWidget(StatCard("Tổng số Hành khách",  total_passengers, "+18.2%", "👥", "#8E24AA"))
-        cards.addWidget(StatCard("Yêu cầu Đặt chỗ",    active_bookings,  "-2.4%",  "↗",  "#E53935"))
-        cards.addWidget(StatCard("Tổng Doanh thu",      revenue_text,     "+24.5%", "💲", "#43A047"))
+        self._card_flights = StatCard("Tổng số Chuyến bay",  total_flights,    "+12.5%", "✈",  "#1E88E5")
+        self._card_passengers = StatCard("Tổng số Hành khách",  total_passengers, "+18.2%", "👥", "#8E24AA")
+        self._card_bookings = StatCard("Yêu cầu Đặt chỗ",    active_bookings,  "-2.4%",  "↗",  "#E53935")
+        self._card_revenue = StatCard("Tổng Doanh thu",      revenue_text,     "+24.5%", "💲", "#43A047")
+        cards.addWidget(self._card_flights)
+        cards.addWidget(self._card_passengers)
+        cards.addWidget(self._card_bookings)
+        cards.addWidget(self._card_revenue)
         layout.addLayout(cards)
 
-        # ── Chart + Routes ────────────────────────────────────────────────────
+        # ── Chart + Routes ──────────────────────────────────────────
         bottom = QHBoxLayout()
         bottom.setSpacing(18)
         bottom.addWidget(RevenueChart(), 1)
-        bottom.addWidget(RoutesPanel())
+        self._routes_panel = RoutesPanel()
+        bottom.addWidget(self._routes_panel)
         layout.addLayout(bottom)
 
         layout.addStretch()
+
+    # ── Helpers ───────────────────────────────────────────────
+    @staticmethod
+    def _fetch_stats():
+        try:
+            return (
+                get_total_flights(),
+                get_total_passengers(),
+                get_active_bookings_count(),
+                get_total_revenue(),
+            )
+        except Exception:
+            return 42, 1280, 854, 124500
+
+    # ── Public API ─────────────────────────────────────────────
+    def refresh(self):
+        """Re-query all 4 stat metrics and update the displayed values."""
+        tf, tp, ab, tr_ = self._fetch_stats()
+        revenue_text = f"${tr_/1000:.1f}k"
+        self._card_flights.set_value(tf)
+        self._card_passengers.set_value(tp)
+        self._card_bookings.set_value(ab)
+        self._card_revenue.set_value(revenue_text)
+        self._routes_panel.refresh()

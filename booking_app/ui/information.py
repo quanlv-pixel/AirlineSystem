@@ -16,7 +16,8 @@ from PySide6.QtGui import (
 )
 from PySide6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout,
-    QPushButton, QFrame, QScrollArea, QSizePolicy, QLabel
+    QPushButton, QFrame, QScrollArea, QSizePolicy, QLabel,
+    QMessageBox
 )
 
 from booking_app.ui.pages.booking_shared import (
@@ -25,6 +26,9 @@ from booking_app.ui.pages.booking_shared import (
     C_BORDER, C_TEXT, C_MID, C_GRAY, C_LGRAY,
     C_GREEN, C_ORANGE
 )
+
+from shared.services.booking_service import get_booking_history_by_user
+from shared.services.account_service import get_is_activated
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -257,6 +261,30 @@ class InformationPage(QWidget):
         lay.setContentsMargins(40, 36, 40, 40)
         lay.setSpacing(20)
 
+        # ── Live Stats: query DB for real total_spent & total_flights ─────
+        username = self.account.get("username", "")
+        try:
+            history = get_booking_history_by_user(username)
+            paid_statuses = {"paid", "confirmed"}
+            total_spent   = sum(
+                row.get("total_amount", 0) or 0
+                for row in history
+                if str(row.get("status", "")).lower() in paid_statuses
+            )
+            total_flights = sum(
+                1 for row in history
+                if str(row.get("status", "")).lower() in paid_statuses
+            )
+        except Exception:
+            total_spent   = self.account.get("total_spent", 0)
+            total_flights = self.account.get("total_flights", 0)
+
+        # ── Read is_activated live from DB ────────────────────────────────
+        try:
+            is_activated = get_is_activated(username)
+        except Exception:
+            is_activated = self.account.get("is_activated", 0)
+
         # ── Body: Profile card (trái) + Nội dung (phải) ──────────────────
         body = QHBoxLayout()
         body.setSpacing(28)
@@ -270,14 +298,45 @@ class InformationPage(QWidget):
         right_col = QVBoxLayout()
         right_col.setSpacing(16)
 
+        # ── Header row: tiêu đề + nút Chỉnh sửa ─────────────────────────
+        header_row = QHBoxLayout()
+        header_row.setContentsMargins(0, 0, 0, 0)
+        page_title = lbl("Hồ sơ cá nhân", 18, 700, C_TEXT)
+        header_row.addWidget(page_title)
+        header_row.addStretch()
+
+        edit_btn = QPushButton("Chỉnh sửa thông tin ✏️")
+        edit_btn.setFixedHeight(38)
+        edit_btn.setCursor(Qt.PointingHandCursor)
+        edit_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: {C_WHITE};
+                color: {C_TEXT};
+                border: 1.5px solid {C_BORDER};
+                border-radius: 10px;
+                font-size: 13px;
+                font-weight: 600;
+                padding: 0 16px;
+            }}
+            QPushButton:hover {{
+                background: {C_BG};
+                border-color: {C_RED};
+                color: {C_RED};
+            }}
+            QPushButton:pressed {{
+                background: #FFEBEE;
+            }}
+        """)
+        edit_btn.clicked.connect(self._on_edit_clicked)
+        header_row.addWidget(edit_btn)
+        right_col.addLayout(header_row)
+
         # Stats row
         stats_row = QHBoxLayout()
         stats_row.setSpacing(16)
 
-        total_spent   = self.account.get("total_spent", 0)
-        total_flights = self.account.get("total_flights", 0)
-        spent_str     = f"${total_spent:,.0f}" if total_spent else "$0"
-        flights_str   = str(total_flights) if total_flights else "0"
+        spent_str   = f"${total_spent:,.0f}" if total_spent else "$0"
+        flights_str = str(total_flights) if total_flights else "0"
 
         stats_row.addWidget(StatCard("Tổng Chi Tiêu", spent_str))
         stats_row.addWidget(StatCard("Chuyến Bay",    flights_str))
@@ -287,29 +346,30 @@ class InformationPage(QWidget):
         info_card = AccountInfoCard(self.account)
         right_col.addWidget(info_card)
 
-        # Nút kích hoạt hội viên
-        activate_btn = QPushButton("KÍCH HOẠT QUYỀN LỢI HỘI VIÊN")
-        activate_btn.setFixedHeight(54)
-        activate_btn.setCursor(Qt.PointingHandCursor)
-        activate_btn.setStyleSheet(f"""
-            QPushButton {{
-                background: {C_RED};
-                color: {C_WHITE};
-                border: none;
-                border-radius: 27px;
-                font-size: 14px;
-                font-weight: 800;
-                letter-spacing: 1px;
-            }}
-            QPushButton:hover {{
-                background: {C_RED2};
-            }}
-            QPushButton:pressed {{
-                background: #B71C1C;
-            }}
-        """)
-        activate_btn.clicked.connect(self.activate_member_clicked.emit)
-        right_col.addWidget(activate_btn)
+        # Nút kích hoạt hội viên — chỉ hiển thị khi CHƯA kích hoạt
+        if not is_activated:
+            activate_btn = QPushButton("KÍCH HOẠT QUYỀN LỢI HỘI VIÊN")
+            activate_btn.setFixedHeight(54)
+            activate_btn.setCursor(Qt.PointingHandCursor)
+            activate_btn.setStyleSheet(f"""
+                QPushButton {{
+                    background: {C_RED};
+                    color: {C_WHITE};
+                    border: none;
+                    border-radius: 27px;
+                    font-size: 14px;
+                    font-weight: 800;
+                    letter-spacing: 1px;
+                }}
+                QPushButton:hover {{
+                    background: {C_RED2};
+                }}
+                QPushButton:pressed {{
+                    background: #B71C1C;
+                }}
+            """)
+            activate_btn.clicked.connect(self.activate_member_clicked.emit)
+            right_col.addWidget(activate_btn)
 
         right_widget = QWidget()
         right_widget.setStyleSheet("background:transparent;")
@@ -318,6 +378,14 @@ class InformationPage(QWidget):
 
         lay.addLayout(body)
         lay.addStretch()
+
+    # ── Slot: Edit button placeholder ────────────────────────────────────
+    def _on_edit_clicked(self):
+        msg = QMessageBox(self)
+        msg.setWindowTitle("Chỉnh sửa thông tin")
+        msg.setText("Tính năng chỉnh sửa thông tin đang được phát triển.\nVui lòng quay lại sau!")
+        msg.setIcon(QMessageBox.Information)
+        msg.exec()
 
 
 # ─────────────────────────────────────────────────────────────────────────────

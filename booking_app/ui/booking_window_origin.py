@@ -13,7 +13,7 @@ import sys, os, random, string
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout,
-    QHBoxLayout, QFrame, QScrollArea, QComboBox,
+    QHBoxLayout, QFrame, QScrollArea, QLineEdit,
     QStackedWidget, QMessageBox
 )
 
@@ -93,50 +93,71 @@ class FlightsPage(QWidget):
 
     def __init__(self):
         super().__init__()
+        self._all_cards: list[tuple[FlightCard, dict]] = []   # (card_widget, flight_data)
+
         main_lay = QVBoxLayout(self)
         main_lay.setContentsMargins(30, 20, 30, 20); main_lay.setSpacing(20)
 
         main_lay.addLayout(page_header("TÌM KIẾM CHUYẾN BAY", "Hệ thống tìm kiếm hành trình bay trực tuyến"))
 
+        # ── Search Bar (single QLineEdit) ──────────────────────────────
         search_box = QFrame(); search_box.setStyleSheet(card_style())
-        spanel = QHBoxLayout(search_box); spanel.setContentsMargins(20, 15, 20, 15); spanel.setSpacing(15)
+        spanel = QHBoxLayout(search_box)
+        spanel.setContentsMargins(20, 14, 20, 14); spanel.setSpacing(12)
 
-        self.cb_dep = QComboBox(); self.cb_dep.addItems(AIRPORTS); self.cb_dep.setFixedHeight(42)
-        self.cb_dst = QComboBox(); self.cb_dst.addItems(AIRPORTS); self.cb_dst.setCurrentIndex(1); self.cb_dst.setFixedHeight(42)
+        self.search_bar = QLineEdit()
+        self.search_bar.setPlaceholderText("Tìm mã sân bay đi, đến, chuyến bay...")
+        self.search_bar.setFixedHeight(44)
+        self.search_bar.setStyleSheet(f"""
+            QLineEdit {{
+                background: #F8F9FB;
+                border: 1.5px solid {C_BORDER};
+                border-radius: 10px;
+                font-size: 14px;
+                padding: 0 14px;
+                color: {C_TEXT};
+            }}
+            QLineEdit:focus {{
+                border-color: {C_RED};
+                background: {C_WHITE};
+            }}
+        """)
+        self.search_bar.textChanged.connect(self._filter_cards)
 
-        btn_search = red_btn("TÌM KIẾM"); btn_search.setFixedWidth(140); btn_search.setFixedHeight(42)
-        btn_search.clicked.connect(self.search_flights)
-
-        spanel.addWidget(lbl("Điểm đi:", weight=600)); spanel.addWidget(self.cb_dep, 1)
-        spanel.addWidget(lbl("Điểm đến:", weight=600)); spanel.addWidget(self.cb_dst, 1)
-        spanel.addWidget(btn_search)
+        spanel.addWidget(lbl("🔍", size=16))
+        spanel.addWidget(self.search_bar, 1)
         main_lay.addWidget(search_box)
 
         self.scroll = QScrollArea(); self.scroll.setWidgetResizable(True)
         self.scroll.setStyleSheet("background:transparent;border:none;")
         self.scroll_widget = QWidget(); self.scroll_widget.setStyleSheet("background:transparent;")
-        self.list_layout = QVBoxLayout(self.scroll_widget); self.list_layout.setSpacing(15); self.list_layout.setContentsMargins(0, 0, 0, 0)
+        self.list_layout = QVBoxLayout(self.scroll_widget)
+        self.list_layout.setSpacing(15); self.list_layout.setContentsMargins(0, 0, 0, 0)
         self.scroll.setWidget(self.scroll_widget)
         main_lay.addWidget(self.scroll, 1)
-        self.search_flights()
 
-    def search_flights(self):
+        # Load all scheduled flights with <90% occupancy on startup
+        self._load_all_flights()
+
+    # ── Load (and cache) all eligible flights ──────────────────────────
+    def _load_all_flights(self):
+        """Query DB, build all FlightCards, store them, and add to layout."""
+        # Clear previous state
         while self.list_layout.count():
             child = self.list_layout.takeAt(0)
             if child.widget(): child.widget().deleteLater()
+        self._all_cards.clear()
 
         try:
             db_flights = get_all_flights()
             flights = []
             for f in db_flights:
                 status = (f.status or "").strip()
-                # Only show Scheduled flights
                 if status.lower() != "scheduled":
                     continue
                 total_seats     = f.total_seats or 1
                 available_seats = f.available_seats or 0
                 occupancy = int((1 - available_seats / total_seats) * 100)
-                # Exclude near-full flights (>= 90% occupied)
                 if occupancy >= 90:
                     continue
                 dep_t = str(f.departure_time)[11:16] if f.departure_time else "--:--"
@@ -155,23 +176,45 @@ class FlightsPage(QWidget):
                     "status":            status,
                     "occupancy_percent": occupancy,
                 })
+
             for f in flights:
                 card = FlightCard(f)
                 card.selected.connect(self.flight_selected.emit)
+                self._all_cards.append((card, f))
                 self.list_layout.addWidget(card)
+
             if not flights:
-                no_flights_lbl = __import__(
-                    "PySide6.QtWidgets", fromlist=["QLabel"]
-                ).QLabel("Không có chuyến bay nào khả dụng.")
-                no_flights_lbl.setAlignment(__import__(
-                    "PySide6.QtCore", fromlist=["Qt"]
-                ).Qt.AlignCenter)
-                no_flights_lbl.setStyleSheet("color:#9AA4B2;font-size:14px;padding:40px;")
-                self.list_layout.addWidget(no_flights_lbl)
+                import PySide6.QtWidgets as _qw
+                import PySide6.QtCore    as _qc
+                no_lbl = _qw.QLabel("Không có chuyến bay nào khả dụng.")
+                no_lbl.setAlignment(_qc.Qt.AlignCenter)
+                no_lbl.setStyleSheet("color:#9AA4B2;font-size:14px;padding:40px;")
+                self.list_layout.addWidget(no_lbl)
         except Exception as e:
             print(f"[FlightsPage Error] {e}")
 
         self.list_layout.addStretch()
+
+    # ── Dynamic filter ────────────────────────────────────────────
+    def _filter_cards(self, keyword: str):
+        """Show/hide flight cards based on dep, dst, or code match."""
+        kw = keyword.strip().upper()
+        for card, flight in self._all_cards:
+            if not kw:
+                card.setVisible(True)
+            else:
+                match = (
+                    kw in flight.get("dep",  "").upper() or
+                    kw in flight.get("dst",  "").upper() or
+                    kw in flight.get("code", "").upper()
+                )
+                card.setVisible(match)
+
+    # ── Legacy public API kept for compatibility (BookingWindow calls this) ──
+    def search_flights(self):
+        """Reload all flights and clear the search bar."""
+        self.search_bar.clear()
+        self._load_all_flights()
 
 
 class PlaceholderPage(QWidget):
