@@ -1,14 +1,14 @@
 from __future__ import annotations
 import sys
-import os
-from datetime import datetime
-from PySide6.QtCore import Qt, Signal
+from collections import defaultdict
+from PySide6.QtCore import Qt, QPropertyAnimation, QEasingCurve, QSize
 from PySide6.QtGui import QColor, QPainter, QBrush, QPen, QPainterPath
 from PySide6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-    QLineEdit, QPushButton, QScrollArea, QFrame, QSizePolicy
+    QLineEdit, QPushButton, QScrollArea, QFrame, QSizePolicy,
+    QGraphicsOpacityEffect
 )
-from booking_app.ui.pages.booking_shared import (lbl, h_sep, card_style, 
+from booking_app.ui.pages.booking_shared import (lbl, h_sep, card_style,
                              C_RED, C_DARK, C_WHITE, C_BG,
                              C_BORDER, C_TEXT, C_MID, C_GRAY, C_LGRAY,
                              C_GREEN, C_BLUE, C_ORANGE)
@@ -17,21 +17,58 @@ from shared.services.booking_service import get_booking_history_by_user
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Thẻ Thống Kê Nhỏ (Điểm cộng nâng cao)
+# Helper: group raw rows by base PNR
+# ─────────────────────────────────────────────────────────────────────────────
+def _group_by_pnr(raw_rows: list[dict]) -> list[dict]:
+    """
+    Collapse individual seat-rows into grouped order dicts keyed by base PNR.
+    A PNR like 'JJ1A2B-2' strips to base 'JJ1A2B'.
+    """
+    groups: dict[str, list[dict]] = defaultdict(list)
+    for row in raw_rows:
+        ref = str(row.get("booking_reference", "")).strip()
+        base_pnr = ref.split("-")[0] if ref else str(row.get("booking_id", "?"))
+        groups[base_pnr].append(row)
+
+    result: list[dict] = []
+    for base_pnr, rows in groups.items():
+        first = rows[0]
+        ticket_count = len(rows)
+        total_group_amount = sum(r.get("total_amount", 0) for r in rows)
+        seats = [str(r.get("seats", "")).strip() for r in rows if r.get("seats")]
+        result.append({
+            "base_pnr":          base_pnr,
+            "booking_id":        first.get("booking_id"),
+            "booking_date":      first.get("booking_date", "—"),
+            "status":            first.get("status", "pending"),
+            "flight_code":       first.get("flight_code", "—"),
+            "departure":         first.get("departure", "—"),
+            "destination":       first.get("destination", "—"),
+            "departure_time":    first.get("departure_time", "—"),
+            "arrival_time":      first.get("arrival_time", "—"),
+            "ticket_count":      ticket_count,
+            "total_amount":      total_group_amount,
+            "seats":             seats,
+        })
+    return result
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Thẻ Thống Kê Nhỏ
 # ─────────────────────────────────────────────────────────────────────────────
 class StatsCard(QWidget):
     def __init__(self, title: str, value: str, icon: str, color: str, parent=None):
         super().__init__(parent)
         self.setStyleSheet(card_style(12))
         self.setFixedHeight(80)
-        
+
         lay = QHBoxLayout(self)
         lay.setContentsMargins(18, 12, 18, 12)
-        
+
         ico_lbl = lbl(icon, 22, 400, color)
         ico_lbl.setFixedWidth(32)
         lay.addWidget(ico_lbl)
-        
+
         text_col = QVBoxLayout()
         text_col.setSpacing(2)
         text_col.addWidget(lbl(title.upper(), 10, 700, C_GRAY, 0.5))
@@ -41,70 +78,206 @@ class StatsCard(QWidget):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Thẻ Lịch Sử Từng Vé Chuyến Bay (Booking History Row Card)
+# Expandable Order Card (grouped tickets)
 # ─────────────────────────────────────────────────────────────────────────────
-class HistoryTicketCard(QWidget):
-    def __init__(self, booking: dict, parent=None):
+class OrderCard(QWidget):
+    """
+    Displays a grouped booking order.  Clicking 'Xem chi tiết' toggles an
+    inline detail section that shows PNR + all seat labels.
+    """
+
+    def __init__(self, order: dict, parent=None):
         super().__init__(parent)
-        self.setStyleSheet(card_style(14))
-        self.setFixedHeight(105)
-        
-        main_lay = QHBoxLayout(self)
-        main_lay.setContentsMargins(20, 15, 20, 15)
-        main_lay.setSpacing(15)
-        
-        # 1. Trạng thái & Mã đặt chỗ
-        status_col = QVBoxLayout()
-        status_col.setSpacing(6)
-        status_col.setAlignment(Qt.AlignVCenter)
-        
-        status = str(booking.get("status", "pending")).lower()
+        self._expanded = False
+        self._order = order
+        self.setStyleSheet(card_style(16))
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+
+        self._root = QVBoxLayout(self)
+        self._root.setContentsMargins(0, 0, 0, 0)
+        self._root.setSpacing(0)
+
+        # ── Main summary row ────────────────────────────────────────────────
+        top_w = QWidget()
+        top_w.setStyleSheet("background:transparent;")
+        top_lay = QHBoxLayout(top_w)
+        top_lay.setContentsMargins(22, 18, 22, 18)
+        top_lay.setSpacing(16)
+
+        # 1. Status badge + booking-id
+        status = str(order.get("status", "pending")).lower()
         st_text, st_color, st_bg = " CHỜ THANH TOÁN ", C_ORANGE, "#FFF8E1"
-        if status in ("confirmed", "đã xác nhận", "completed"):
+        if status in ("confirmed", "đã xác nhận", "completed", "paid"):
             st_text, st_color, st_bg = " ĐÃ XÁC NHẬN ", C_GREEN, "#E8F5E9"
         elif status in ("cancelled", "đã hủy"):
             st_text, st_color, st_bg = " ĐÃ HỦY VÉ ", C_RED, "#FFEBEE"
-            
+
+        status_col = QVBoxLayout()
+        status_col.setSpacing(6)
+        status_col.setAlignment(Qt.AlignVCenter)
+
         st_lbl = lbl(st_text, 10, 800, st_color)
-        st_lbl.setStyleSheet(f"background:{st_bg}; border-radius:6px; padding:4px 6px;")
+        st_lbl.setStyleSheet(f"background:{st_bg}; border-radius:6px; padding:4px 8px;")
         st_lbl.setAlignment(Qt.AlignCenter)
-        
         status_col.addWidget(st_lbl)
-        status_col.addWidget(lbl(f"Mã: #{booking.get('booking_id', '000')}", 12, 700, C_TEXT))
-        main_lay.addLayout(status_col)
-        
-        main_lay.addSpacing(10)
-        
-        # 2. Thông tin chặng bay chính
+        status_col.addWidget(lbl(f"#{order.get('base_pnr', '—')}", 11, 700, C_GRAY))
+        top_lay.addLayout(status_col)
+
+        # 2. Route
         route_col = QVBoxLayout()
         route_col.setSpacing(4)
         route_col.setAlignment(Qt.AlignVCenter)
-        
-        route_title = QHBoxLayout()
-        route_title.setSpacing(8)
-        route_title.addWidget(lbl(booking.get("departure", "SGN"), 18, 800, C_TEXT))
-        route_title.addWidget(lbl("➔", 14, 400, C_RED))
-        route_title.addWidget(lbl(booking.get("destination", "HAN"), 18, 800, C_TEXT))
-        route_title.addStretch()
-        
-        route_col.addLayout(route_title)
-        route_col.addWidget(lbl(f"Chuyến bay: {booking.get('flight_code', 'JJ-—')}  |  Ghế: {booking.get('seats') or 'Chưa chọn'}", 12, 500, C_MID))
-        main_lay.addLayout(route_col, 2)
-        
-        # 3. Thời gian bay & Đặt chỗ
+
+        route_row = QHBoxLayout()
+        route_row.setSpacing(8)
+        route_row.addWidget(lbl(order.get("departure", "—")[:3].upper(), 22, 800, C_TEXT))
+        route_row.addWidget(lbl("➔", 14, 400, C_RED))
+        route_row.addWidget(lbl(order.get("destination", "—")[:3].upper(), 22, 800, C_TEXT))
+        route_row.addStretch()
+        route_col.addLayout(route_row)
+        route_col.addWidget(lbl(f"✈  {order.get('flight_code', '—')}", 12, 500, C_MID))
+        top_lay.addLayout(route_col, 2)
+
+        # 3. Date & time
+        dep_t = str(order.get("departure_time", "—"))
+        dep_short = dep_t[11:16] if len(dep_t) > 10 else dep_t
+        date_str = str(order.get("booking_date", "—"))[:10]
+
         time_col = QVBoxLayout()
         time_col.setSpacing(4)
         time_col.setAlignment(Qt.AlignVCenter)
-        time_col.addWidget(lbl(f"📅 Khởi hành: {booking.get('departure_time', '—')}", 12, 600, C_TEXT))
-        time_col.addWidget(lbl(f"Ngày đặt: {booking.get('booking_date', '—')}", 11, 400, C_GRAY))
-        main_lay.addLayout(time_col, 2)
-        
-        # 4. Giá tiền thanh toán
+        time_col.addWidget(lbl(f"📅  Khởi hành: {dep_short}", 12, 600, C_TEXT))
+        time_col.addWidget(lbl(f"Ngày đặt: {date_str}", 11, 400, C_GRAY))
+        top_lay.addLayout(time_col, 2)
+
+        # 4. Ticket count chip
+        count = order.get("ticket_count", 1)
+        ticket_col = QVBoxLayout()
+        ticket_col.setAlignment(Qt.AlignVCenter)
+        count_lbl = lbl(f"🎫  {count} vé", 13, 700, C_RED)
+        count_lbl.setStyleSheet(
+            f"background:#FFF0F0; border-radius:10px; padding:6px 14px; color:{C_RED};"
+        )
+        ticket_col.addWidget(count_lbl)
+        top_lay.addLayout(ticket_col)
+
+        # 5. Price + detail button
         price_col = QVBoxLayout()
+        price_col.setSpacing(6)
         price_col.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        price_col.addWidget(lbl(f"${booking.get('total_amount', 0)}", 22, 900, C_RED))
+        price_col.addWidget(lbl(f"${order.get('total_amount', 0):,.0f}", 22, 900, C_RED))
         price_col.addWidget(lbl("Tổng hóa đơn", 10, 500, C_GRAY))
-        main_lay.addLayout(price_col)
+
+        self._detail_btn = QPushButton("Xem chi tiết  ▾")
+        self._detail_btn.setFixedHeight(30)
+        self._detail_btn.setCursor(Qt.PointingHandCursor)
+        self._detail_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: transparent; border: 1.5px solid {C_BORDER};
+                border-radius: 8px; font-size: 11px; font-weight: 700;
+                color: {C_MID}; padding: 0 10px;
+            }}
+            QPushButton:hover {{
+                background: {C_LGRAY}; border-color: {C_RED}; color: {C_RED};
+            }}
+        """)
+        self._detail_btn.clicked.connect(self._toggle_details)
+        price_col.addWidget(self._detail_btn)
+        top_lay.addLayout(price_col)
+
+        self._root.addWidget(top_w)
+
+        # ── Expandable detail section (hidden by default) ────────────────────
+        self._detail_w = QWidget()
+        self._detail_w.setStyleSheet(
+            f"background:#F8F9FE; border-top:1px solid {C_BORDER};"
+            f"border-bottom-left-radius:14px; border-bottom-right-radius:14px;"
+        )
+        self._detail_w.setVisible(False)
+
+        detail_lay = QVBoxLayout(self._detail_w)
+        detail_lay.setContentsMargins(24, 16, 24, 18)
+        detail_lay.setSpacing(12)
+
+        # PNR row
+        pnr_row = QHBoxLayout()
+        pnr_row.addWidget(lbl("🔖  Mã đặt chỗ (PNR):", 12, 600, C_GRAY))
+        pnr_val = lbl(order.get("base_pnr", "—"), 13, 800, C_DARK)
+        pnr_val.setStyleSheet(
+            f"background:{C_WHITE}; border:1.5px solid {C_BORDER};"
+            f"border-radius:8px; padding:4px 12px; color:{C_DARK};"
+        )
+        pnr_row.addWidget(pnr_val)
+        pnr_row.addStretch()
+        detail_lay.addLayout(pnr_row)
+
+        # Seat chips row
+        seats: list[str] = order.get("seats", [])
+        if seats:
+            seat_row = QHBoxLayout()
+            seat_row.setSpacing(8)
+            seat_row.addWidget(lbl("🪑  Ghế đã chọn:", 12, 600, C_GRAY))
+            chips_w = QWidget()
+            chips_w.setStyleSheet("background:transparent;")
+            chips_lay = QHBoxLayout(chips_w)
+            chips_lay.setContentsMargins(0, 0, 0, 0)
+            chips_lay.setSpacing(6)
+            for seat in seats:
+                chip = lbl(seat, 12, 800, C_WHITE)
+                chip.setAlignment(Qt.AlignCenter)
+                chip.setFixedHeight(28)
+                chip.setStyleSheet(
+                    f"background:{C_DARK}; border-radius:8px;"
+                    f"padding:0 10px; color:{C_WHITE};"
+                )
+                chips_lay.addWidget(chip)
+            chips_lay.addStretch()
+            seat_row.addWidget(chips_w, 1)
+            detail_lay.addLayout(seat_row)
+        else:
+            detail_lay.addWidget(lbl("Chưa có thông tin ghế.", 12, 400, C_GRAY))
+
+        # Per-ticket breakdown
+        if count > 1:
+            breakdown = lbl(
+                f"Mỗi vé: ${order.get('total_amount', 0) / count:,.1f}  ·  "
+                f"{count} vé  ·  Tổng: ${order.get('total_amount', 0):,.0f}",
+                11, 500, C_GRAY
+            )
+            detail_lay.addWidget(breakdown)
+
+        self._root.addWidget(self._detail_w)
+
+    # ── Toggle expand / collapse ─────────────────────────────────────────────
+    def _toggle_details(self):
+        self._expanded = not self._expanded
+        self._detail_w.setVisible(self._expanded)
+        if self._expanded:
+            self._detail_btn.setText("Ẩn chi tiết  ▴")
+            self._detail_btn.setStyleSheet(f"""
+                QPushButton {{
+                    background: {C_RED}; border: none;
+                    border-radius: 8px; font-size: 11px; font-weight: 700;
+                    color: {C_WHITE}; padding: 0 10px;
+                }}
+                QPushButton:hover {{ background: #C0392B; }}
+            """)
+        else:
+            self._detail_btn.setText("Xem chi tiết  ▾")
+            self._detail_btn.setStyleSheet(f"""
+                QPushButton {{
+                    background: transparent; border: 1.5px solid {C_BORDER};
+                    border-radius: 8px; font-size: 11px; font-weight: 700;
+                    color: {C_MID}; padding: 0 10px;
+                }}
+                QPushButton:hover {{
+                    background: {C_LGRAY}; border-color: {C_RED}; color: {C_RED};
+                }}
+            """)
+        # Let parent scroll area recalculate size
+        self.adjustSize()
+        if self.parent():
+            self.parent().adjustSize()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -114,15 +287,14 @@ class HistoryPage(QWidget):
     def __init__(self, account: dict | None = None, parent=None):
         super().__init__(parent)
         self.account = account or {"account_id": 1, "full_name": "Khách hàng"}
-        self.all_bookings: list[dict] = []
+        self.all_orders:  list[dict] = []   # grouped order objects
         self.current_filter = "all"
-        
-        # Giao diện chính
+
         root = QVBoxLayout(self)
         root.setContentsMargins(28, 24, 28, 28)
         root.setSpacing(16)
-        
-        # Tiêu đề trang (Bỏ chữ thoát portal hoàn toàn)
+
+        # Header
         header_lay = QHBoxLayout()
         title_col = QVBoxLayout()
         title_col.setSpacing(4)
@@ -131,33 +303,31 @@ class HistoryPage(QWidget):
         header_lay.addLayout(title_col)
         header_lay.addStretch()
         root.addLayout(header_lay)
-        
-        # Thanh Thống Kê Đỉnh Đầu
+
+        # Stats bar
         self.stats_layout = QHBoxLayout()
         self.stats_layout.setSpacing(16)
         root.addLayout(self.stats_layout)
-        
-        # Thanh Điều Khiển: Gồm bộ lọc trạng thái + Thanh tìm kiếm (Search)
+
+        # Filter + search bar
         ctrl_row = QHBoxLayout()
         ctrl_row.setSpacing(12)
-        
-        # Nhóm Nút Bộ Lọc (Filter)
-        self.btn_all = QPushButton("Tất cả chuyến")
-        self.btn_done = QPushButton("Đã xác nhận")
+
+        self.btn_all     = QPushButton("Tất cả đơn hàng")
+        self.btn_done    = QPushButton("Đã xác nhận")
         self.btn_pending = QPushButton("Chờ thanh toán")
-        
+
         for b in [self.btn_all, self.btn_done, self.btn_pending]:
             b.setFixedHeight(36)
             b.setCursor(Qt.PointingHandCursor)
-        
+
         ctrl_row.addWidget(self.btn_all)
         ctrl_row.addWidget(self.btn_done)
         ctrl_row.addWidget(self.btn_pending)
         ctrl_row.addSpacing(20)
-        
-        # Hộp tìm kiếm (Search box)
+
         self.search_input = QLineEdit()
-        self.search_input.setPlaceholderText("🔍 Tìm theo mã bay, điểm đi, điểm đến...")
+        self.search_input.setPlaceholderText("🔍 Tìm theo mã bay, điểm đi, điểm đến, mã PNR...")
         self.search_input.setFixedHeight(38)
         self.search_input.setStyleSheet(f"""
             QLineEdit {{
@@ -168,149 +338,152 @@ class HistoryPage(QWidget):
         """)
         self.search_input.textChanged.connect(self._apply_filter_and_search)
         ctrl_row.addWidget(self.search_input, 1)
-        
         root.addLayout(ctrl_row)
-        
-        # Khu vực Scroll Area hiển thị danh sách vé
+
+        # Scroll area
         self.scroll = QScrollArea()
         self.scroll.setWidgetResizable(True)
         self.scroll.setFrameShape(QFrame.NoFrame)
         self.scroll.setStyleSheet("background:transparent; border:none;")
         root.addWidget(self.scroll, 1)
-        
-        # Widget chứa danh sách bên trong Scroll
+
         self.list_container = QWidget()
         self.list_container.setStyleSheet("background:transparent;")
         self.list_lay = QVBoxLayout(self.list_container)
         self.list_lay.setContentsMargins(0, 4, 0, 10)
         self.list_lay.setSpacing(12)
         self.scroll.setWidget(self.list_container)
-        
-        # Nhãn thông báo rỗng dạng Card lớn ẩn mặc định
-        self.empty_lbl = lbl("Chưa có dữ liệu đặt vé nào phù hợp với tìm kiếm của bạn.", 14, 500, C_GRAY)
+
+        self.empty_lbl = lbl("Chưa có đơn đặt vé nào phù hợp.", 14, 500, C_GRAY)
         self.empty_lbl.setAlignment(Qt.AlignCenter)
         self.empty_lbl.setContentsMargins(0, 60, 0, 60)
         self.list_lay.addWidget(self.empty_lbl)
-        
-        # Kết nối sự kiện bộ lọc
+
         self.btn_all.clicked.connect(lambda: self._set_filter("all"))
         self.btn_done.clicked.connect(lambda: self._set_filter("confirmed"))
         self.btn_pending.clicked.connect(lambda: self._set_filter("pending"))
-        
-        # Đọc dữ liệu lần đầu tiên
+
         self.refresh()
 
+    # ─────────────────────────────────────────────────────────────────────────
     def refresh(self, current_account: dict | None = None):
-        """Hàm đồng bộ và tải lại toàn bộ dữ liệu từ Service Layer"""
+        """Re-fetch raw rows, group by PNR, rebuild UI."""
         if current_account:
             self.account = current_account
-            
-        username = self.account.get("username", "guest")
-        self.all_bookings = get_booking_history_by_user(username)
 
-        # Cập nhật Widgets thống kê đỉnh đầu
+        username = self.account.get("username", "guest")
+        raw_rows = get_booking_history_by_user(username)
+
+        # Group individual seat rows into consolidated order objects
+        self.all_orders = _group_by_pnr(raw_rows)
+
         self._update_stats_header()
-        # Áp dụng hiển thị danh sách lọc lên màn hình
         self._set_filter("all")
 
+    # ─────────────────────────────────────────────────────────────────────────
     def _update_stats_header(self):
-        """Xóa và dựng lại bảng thống kê nâng cao thực tế"""
-        # Xóa các widget cũ trong thanh thống kê
         while self.stats_layout.count():
             item = self.stats_layout.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
-                
-        total_trips = len([b for b in self.all_bookings if str(b.get("status")).lower() in ("confirmed", "completed", "paid")])
-        total_spent = sum(b.get("total_amount", 0) for b in self.all_bookings if str(b.get("status")).lower() in ("confirmed", "completed", "paid"))
-        pending_pay = len([b for b in self.all_bookings if str(b.get("status")).lower() == "pending"])
-        
-        self.stats_layout.addWidget(StatsCard("Chuyến bay thành công", f"{total_trips} chuyến", "✈", C_GREEN))
-        self.stats_layout.addWidget(StatsCard("Tổng tiền tích lũy", f"${total_spent}", "🪪", C_RED))
-        self.stats_layout.addWidget(StatsCard("Chờ xử lý thanh toán", f"{pending_pay} giao dịch", "⏳", C_ORANGE))
 
+        confirmed_orders = [
+            o for o in self.all_orders
+            if str(o.get("status", "")).lower() in ("confirmed", "completed", "paid")
+        ]
+        total_orders  = len(confirmed_orders)
+        total_tickets = sum(o.get("ticket_count", 1) for o in confirmed_orders)
+        total_spent   = sum(o.get("total_amount", 0) for o in confirmed_orders)
+        pending_pay   = len([
+            o for o in self.all_orders
+            if str(o.get("status", "")).lower() == "pending"
+        ])
+
+        self.stats_layout.addWidget(StatsCard("Đơn hàng thành công", f"{total_orders} đơn", "✈", C_GREEN))
+        self.stats_layout.addWidget(StatsCard("Tổng vé đã mua", f"{total_tickets} vé", "🎫", C_BLUE))
+        self.stats_layout.addWidget(StatsCard("Tổng tiền tích lũy", f"${total_spent:,.0f}", "🪪", C_RED))
+        self.stats_layout.addWidget(StatsCard("Chờ xử lý", f"{pending_pay} giao dịch", "⏳", C_ORANGE))
+
+    # ─────────────────────────────────────────────────────────────────────────
     def _set_filter(self, filter_type: str):
         self.current_filter = filter_type
-        
-        # Đồng bộ đổi màu style cho 3 nút bấm trạng thái giống hệt CSS chuyên nghiệp
-        active_style = f"background:{C_RED}; color:{C_WHITE}; border:none; border-radius:8px; font-weight:700; padding:0 14px;"
-        normal_style = f"background:{C_WHITE}; color:{C_MID}; border:1.5px solid {C_BORDER}; border-radius:8px; font-weight:500; padding:0 14px;"
-        
-        self.btn_all.setStyleSheet(active_style if filter_type == "all" else normal_style)
-        self.btn_done.setStyleSheet(active_style if filter_type == "confirmed" else normal_style)
-        self.btn_pending.setStyleSheet(active_style if filter_type == "pending" else normal_style)
-        
+
+        active_style = (f"background:{C_RED}; color:{C_WHITE}; border:none;"
+                        f"border-radius:8px; font-weight:700; padding:0 14px;")
+        normal_style = (f"background:{C_WHITE}; color:{C_MID};"
+                        f"border:1.5px solid {C_BORDER}; border-radius:8px;"
+                        f"font-weight:500; padding:0 14px;")
+
+        self.btn_all.setStyleSheet(    active_style if filter_type == "all"       else normal_style)
+        self.btn_done.setStyleSheet(   active_style if filter_type == "confirmed" else normal_style)
+        self.btn_pending.setStyleSheet(active_style if filter_type == "pending"   else normal_style)
+
         self._apply_filter_and_search()
 
+    # ─────────────────────────────────────────────────────────────────────────
     def _apply_filter_and_search(self):
-        """Hành động lọc danh sách và tìm kiếm text song song"""
-        # Xóa toàn bộ các card cũ ra khỏi Layout (Trừ nhãn empty_lbl)
+        # Clear existing order cards
         for i in reversed(range(self.list_lay.count())):
-            item=self.list_lay.takeAt(i)
-
+            item = self.list_lay.takeAt(i)
             if item.widget():
-                w=item.widget()
+                w = item.widget()
                 if w != self.empty_lbl:
                     w.deleteLater()
 
-            elif item.spacerItem():
-                pass
-                
         search_txt = self.search_input.text().strip().lower()
         visible_count = 0
-        
-        for b in self.all_bookings:
-            status = str(b.get("status", "pending")).lower()
-            
-            # Khớp điều kiện bộ lọc nút bấm trước
+
+        for order in self.all_orders:
+            status = str(order.get("status", "pending")).lower()
+
+            # Status filter
             if self.current_filter == "confirmed" and status not in ("confirmed", "completed", "paid"):
                 continue
             if self.current_filter == "pending" and status != "pending":
                 continue
-                
-            # Khớp tiếp điều kiện thanh tìm kiếm (Mã bay, Điểm đi, Điểm đến)
-            match_search = (
-                search_txt in str(b.get("flight_code", "")).lower() or
-                search_txt in str(b.get("departure", "")).lower() or
-                search_txt in str(b.get("destination", "")).lower() or
-                search_txt in str(b.get("booking_id", "")).lower()
-            )
-            
-            if not match_search and search_txt != "":
+
+            # Text search: PNR, flight code, departure, destination
+            haystack = " ".join([
+                str(order.get("base_pnr", "")),
+                str(order.get("flight_code", "")),
+                str(order.get("departure", "")),
+                str(order.get("destination", "")),
+                " ".join(order.get("seats", [])),
+            ]).lower()
+
+            if search_txt and search_txt not in haystack:
                 continue
-                
-            # Đạt mọi điều kiện -> Tiến hành vẽ Card lên giao diện
-            card = HistoryTicketCard(b)
+
+            card = OrderCard(order)
             self.list_lay.addWidget(card)
             visible_count += 1
-            
-        # Thêm khoảng đệm co dãn tự động ở đáy danh sách
+
         self.list_lay.addStretch()
-        
-        # Ẩn/Hiện thông báo rỗng nếu không tìm thấy vé nào
         self.empty_lbl.setVisible(visible_count == 0)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Kiểm thử độc lập trang History
+# Standalone test
 # ─────────────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     app.setStyle("Fusion")
-    
-    # Tạo Tk ảo của khách hàng đăng nhập thử nghiệm
-    test_account = {"account_id": 1, "full_name": "Lê Văn Quân", "username": "quanlv", "email": "quanle@gmail.com"}
-    
+
+    test_account = {
+        "account_id": 1,
+        "full_name":  "Lê Văn Quân",
+        "username":   "quanlv",
+        "email":      "quanle@gmail.com",
+    }
+
     window = QWidget()
     window.setWindowTitle("JetJet Air — Kiểm tra Lịch sử đặt chỗ")
     window.resize(1100, 750)
     window.setStyleSheet(f"background: {C_BG};")
-    
+
     layout = QVBoxLayout(window)
     layout.setContentsMargins(0, 0, 0, 0)
-    
-    page = HistoryPage(account=test_account)
-    layout.addWidget(page)
-    
+    layout.addWidget(HistoryPage(account=test_account))
+
     window.show()
     sys.exit(app.exec())

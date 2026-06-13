@@ -94,8 +94,10 @@ def get_booking_history_by_user(username: str):
     # bookings table has: booking_id, booking_date, total_amount, booking_status, created_by, seat_number
     # flights table has: flight_id, flight_number, departure, destination, departure_time, arrival_time
     query = """
-        SELECT b.booking_id, b.booking_date, b.total_amount, b.booking_status as status,
-               f.flight_number as flight_code, f.departure, f.destination, f.departure_time, f.arrival_time,
+        SELECT b.booking_id, b.booking_reference, b.booking_date, b.total_amount,
+               b.booking_status as status,
+               f.flight_number as flight_code, f.departure, f.destination,
+               f.departure_time, f.arrival_time,
                b.seat_number as seats
         FROM bookings b
         JOIN flights f ON b.flight_id = f.flight_id
