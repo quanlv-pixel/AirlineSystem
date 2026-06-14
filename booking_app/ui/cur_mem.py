@@ -14,8 +14,8 @@ from PySide6.QtWidgets import (
 )
 from booking_app.ui.pages.booking_shared import (lbl, card_style, C_RED, C_DARK, C_WHITE, C_BG,
                              C_BORDER, C_TEXT, C_MID, C_GRAY, C_LGRAY, C_GREEN, C_ORANGE)
-from booking_app.ui.promotion import get_footer
-from shared.services.member_service import get_tier_for_spending, get_user_spending_from_db
+from booking_app.ui.promotion import get_footer, PromoCard
+from shared.services.member_service import get_tier_for_spending, get_user_spending_from_db, TIER_PROMOS
 
 # ── Tier metadata ─────────────────────────────────────────────────────────────
 _TIER_META = {
@@ -230,6 +230,37 @@ class CurrentMemberPage(QWidget):
             grid.addWidget(card, i // 2, i % 2)
 
         self._body_lay.addLayout(grid)
+
+        # ── Promo Codes ───────────────────────────────────────────────────────
+        self._body_lay.addSpacing(30)
+        self._body_lay.addWidget(lbl("Mã Giảm Giá & Ưu Đãi", 16, 700, C_DARK))
+
+        # General promos (visible to all activated members)
+        promos = [
+            ("Chào Bạn Mới", "HELLOFIRST",  "Giảm trực tiếp $15 cho lần đặt vé đầu tiên.", "15/08/2026"),
+            ("Bay Khứ Hồi Thuận Tiện", "ROUNDTRIP10", "Giảm 10% tổng giá trị khi đặt hành trình khứ hồi.", "20/10/2026"),
+            ("Cuối Tuần Vi Vu", "WEEKEND5",  "Ưu đãi giảm giá đặc biệt khi khởi hành vào Thứ 7 hoặc Chủ Nhật.", "01/07/2026"),
+        ]
+        promo_grid = QGridLayout()
+        promo_grid.setSpacing(14)
+        for i, p in enumerate(promos):
+            promo_grid.addWidget(PromoCard(p[0], p[1], p[2], p[3]), i // 2, i % 2)
+        self._body_lay.addLayout(promo_grid)
+
+        # Tier-exclusive promos
+        tier_promos = TIER_PROMOS.get(tier, [])
+        if tier_promos:
+            self._body_lay.addSpacing(20)
+            self._body_lay.addWidget(lbl(f"Ưu đãi độc quyền — {tier}", 16, 700, C_DARK))
+            excl_grid = QGridLayout()
+            excl_grid.setSpacing(14)
+            for i, tp in enumerate(tier_promos):
+                excl_grid.addWidget(
+                    PromoCard(tp["label"], tp["code"], tp["desc"], tp["exp"], exclusive=True),
+                    i // 2, i % 2
+                )
+            self._body_lay.addLayout(excl_grid)
+
         self._body_lay.addStretch()
 
 
