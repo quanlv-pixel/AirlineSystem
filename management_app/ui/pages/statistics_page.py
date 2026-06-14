@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
     QFrame,
     QScrollArea,
     QSizePolicy,
+    QComboBox,
 )
 
 try:
@@ -132,6 +133,13 @@ class StatCard(QWidget):
         layout.addStretch()
         layout.addWidget(title_lbl)
         layout.addWidget(value_lbl)
+        # store ref for dynamic update
+        self._value_lbl  = value_lbl
+        self._change_lbl = change_lbl
+
+    def set_value(self, new_value: str) -> None:
+        """Update displayed value without rebuilding the card."""
+        self._value_lbl.setText(str(new_value))
 
 
 class RevenueChart(QWidget):
@@ -151,7 +159,7 @@ class RevenueChart(QWidget):
 
         left = QVBoxLayout()
 
-        title = QLabel("Revenue Performance")
+        title = QLabel("Hiệu suất Doanh thu")
 
         title.setStyleSheet(f"""
             font-size: 18px;
@@ -159,7 +167,7 @@ class RevenueChart(QWidget):
             color: {C_TEXT};
         """)
 
-        subtitle = QLabel("WEEKLY OVERVIEW")
+        subtitle = QLabel("TỔNG HỢP TUẦN")
 
         subtitle.setStyleSheet(f"""
             font-size: 11px;
@@ -363,7 +371,7 @@ class FleetEfficiency(QWidget):
 
         layout.setContentsMargins(22, 20, 22, 20)
 
-        title = QLabel("FLEET EFFICIENCY")
+        title = QLabel("HIỆU QUẢ ĐỘI BAY")
 
         title.setStyleSheet("""
             font-size: 11px;
@@ -373,7 +381,7 @@ class FleetEfficiency(QWidget):
         """)
 
         text = QLabel(
-            "Operating at <span style='color:#E53935;'>94%</span> capacity."
+            "Đang hoạt động ở mức <span style='color:#E53935;'>94%</span> công suất."
         )
 
         text.setTextFormat(Qt.RichText)
@@ -451,50 +459,81 @@ class StatisticsPage(QWidget):
 
         layout.setSpacing(18)
 
+        # TOP HEADER: title + time-filter combo
+        top_hdr = QHBoxLayout()
+
+        title_col = QVBoxLayout()
+        title_col.setSpacing(4)
+        title_col.addWidget(
+            _h := QLabel("Thống kê & Phân tích")
+        )
+        _h.setStyleSheet(f"font-size:22px; font-weight:800; color:{C_TEXT};")
+        title_col.addWidget(
+            _s := QLabel("Tổng hợp hoạt động kinh doanh JetJet Air")
+        )
+        _s.setStyleSheet(f"font-size:13px; color:{C_GRAY};")
+        top_hdr.addLayout(title_col)
+        top_hdr.addStretch()
+
+        self._time_combo = QComboBox()
+        self._time_combo.addItems(["Năm nay", "Tháng này", "Tuần này"])
+        self._time_combo.setFixedHeight(36)
+        self._time_combo.setStyleSheet(f"""
+            QComboBox {{
+                background: {C_WHITE}; border: 1px solid {C_BORDER};
+                border-radius: 10px; padding: 0 14px;
+                font-size: 12px; font-weight: 700; color: {C_TEXT};
+            }}
+            QComboBox::drop-down {{ border: none; width: 18px; }}
+            QComboBox QAbstractItemView {{
+                background: {C_WHITE}; border: 1px solid {C_BORDER};
+                selection-background-color: #FFEBEE;
+                selection-color: {C_RED}; font-size: 12px;
+            }}
+        """)
+        self._time_combo.currentIndexChanged.connect(self._on_time_filter)
+        top_hdr.addWidget(self._time_combo)
+
+        layout.addLayout(top_hdr)
+
         # TOP CARDS
         cards = QHBoxLayout()
 
         cards.setSpacing(14)
 
-        cards.addWidget(
-            StatCard(
-                "$",
-                C_RED,
-                "Total Revenue",
-                f"${self.total_revenue:,.0f}",
-                "+18.4%",
-            )
+        self._card_revenue = StatCard(
+            "$",
+            C_RED,
+            "Tổng Doanh Thu",
+            f"${self.total_revenue:,.0f}",
+            "+18.4%",
+        )
+        self._card_flights = StatCard(
+            "✈",
+            C_BLUE,
+            "Tổng Chuyến Bay",
+            f"{self.total_flights:,}",
+            "+8.2%",
+        )
+        self._card_passengers = StatCard(
+            "👥",
+            "#8E24AA",
+            "Hành Khách",
+            f"{self.total_passengers:,}",
+            "+12.1%",
+        )
+        self._card_load = StatCard(
+            "↗",
+            C_ORANGE,
+            "Hệ Số Tải",
+            f"{self.load_factor}%",
+            "+3.8%",
         )
 
-        cards.addWidget(
-            StatCard(
-                "✈",
-                C_BLUE,
-                "Total Flights",
-                f"{self.total_flights:,}",
-                "+8.2%",
-            )
-        )
-
-        cards.addWidget(
-            StatCard(
-                "👥",
-                "#8E24AA",
-                "Passengers",
-                f"{self.total_passengers:,}",
-                "+12.1%",
-            )
-        )
-
-        cards.addWidget(
-            StatCard(
-                "↗",
-                C_ORANGE,
-                "Load Factor",
-                f"{self.load_factor}%",
-                "+3.8%",
-            )
-        )
+        cards.addWidget(self._card_revenue)
+        cards.addWidget(self._card_flights)
+        cards.addWidget(self._card_passengers)
+        cards.addWidget(self._card_load)
 
         layout.addLayout(cards)
 
@@ -512,12 +551,12 @@ class StatisticsPage(QWidget):
         right.setSpacing(14)
 
         insights = InfoCard(
-            "Insights",
+            "Thông tin chi tiết",
             [
-                ("TOP ROUTE", "SGN → ICN", C_BLUE),
-                ("OCCUPANCY", "96%", C_GREEN),
-                ("DELAYED", "4", C_ORANGE),
-                ("AVG PRICE", "$312", C_BLUE),
+                ("TUYẾN PHỔ BIẾN", "SGN → ICN", C_BLUE),
+                ("TỶ LỆ LẤP ĐẦY", "96%", C_GREEN),
+                ("CHẬM CHUYẾN",   "4", C_ORANGE),
+                ("GIÁ TB/VÉ",     "$312", C_BLUE),
             ]
         )
 
@@ -535,7 +574,7 @@ class StatisticsPage(QWidget):
         bottom.setSpacing(14)
 
         routes = InfoCard(
-            "Top Routes",
+            "Tuyến bay hàng đầu",
             [
                 ("SGN → HAN", "92%", C_GREEN),
                 ("SGN → ICN", "88%", C_GREEN),
@@ -545,11 +584,11 @@ class StatisticsPage(QWidget):
         )
 
         system = InfoCard(
-            "System Status",
+            "Trạng thái Hệ thống",
             [
-                ("BOOKING", "ONLINE", C_GREEN),
-                ("PAYMENT", "STABLE", C_GREEN),
-                ("API", "HEALTHY", C_GREEN),
+                ("ĐẶT CHỖ",  "TRỰC TUYẾN", C_GREEN),
+                ("THANH TOÁN", "ỔN ĐỊNH",   C_GREEN),
+                ("API",        "HOẠT ĐỘNG", C_GREEN),
             ]
         )
 
@@ -563,7 +602,7 @@ class StatisticsPage(QWidget):
         footer = QHBoxLayout()
 
         left = QLabel(
-            "© 2026 JETJET AIR ANALYTICS"
+            "© 2026 JETJET AIR PHÂN TÍCH DỮ LIỆU"
         )
 
         left.setStyleSheet(f"""
@@ -574,7 +613,7 @@ class StatisticsPage(QWidget):
         """)
 
         right = QLabel(
-            "● REALTIME ACTIVE"
+            "● HOẠT ĐỘNG THỜI GIAN THỰC"
         )
 
         right.setStyleSheet(f"""
@@ -616,3 +655,41 @@ class StatisticsPage(QWidget):
             self.total_bookings = 9500
 
             self.load_factor = 82
+
+    def _on_time_filter(self, index: int) -> None:
+        """
+        Recalculate displayed stats based on the selected time period.
+        index 0 = Năm nay  (modifier ~1.0)
+        index 1 = Tháng này (modifier ~0.10 with variation)
+        index 2 = Tuần này  (modifier ~0.05 with variation)
+        """
+        base_rev   = self.total_revenue
+        base_flt   = self.total_flights
+        base_pax   = self.total_passengers
+        base_load  = self.load_factor
+
+        if index == 0:   # Năm nay — full-year baseline
+            rev  = base_rev
+            flt  = base_flt
+            pax  = base_pax
+            load = base_load
+            chg_r, chg_f, chg_p, chg_l = "+18.4%", "+8.2%", "+12.1%", "+3.8%"
+
+        elif index == 1: # Tháng này — ~1/10 of annual + realistic variation
+            rev  = round(base_rev  * 0.097,  2)
+            flt  = max(1, round(base_flt  * 0.092))
+            pax  = max(1, round(base_pax  * 0.101))
+            load = min(100, round(base_load * 1.03, 1))
+            chg_r, chg_f, chg_p, chg_l = "+5.2%", "+3.1%", "+4.7%", "+1.2%"
+
+        else:            # Tuần này — ~1/52 of annual + realistic variation
+            rev  = round(base_rev  * 0.023,  2)
+            flt  = max(1, round(base_flt  * 0.021))
+            pax  = max(1, round(base_pax  * 0.024))
+            load = min(100, round(base_load * 1.01, 1))
+            chg_r, chg_f, chg_p, chg_l = "+1.8%", "+0.9%", "+2.1%", "+0.4%"
+
+        self._card_revenue.set_value(f"${rev:,.0f}")
+        self._card_flights.set_value(f"{flt:,}")
+        self._card_passengers.set_value(f"{pax:,}")
+        self._card_load.set_value(f"{load}%")

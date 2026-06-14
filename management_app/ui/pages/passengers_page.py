@@ -2,7 +2,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QPainter, QBrush, QPainterPath
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QFrame, QLineEdit, QScrollArea, QSizePolicy,
+    QFrame, QLineEdit, QScrollArea, QSizePolicy, QComboBox,
 )
 
 from shared.services.passenger_service import (
@@ -10,6 +10,7 @@ from shared.services.passenger_service import (
     search_passengers_enriched,
 )
 from shared.services.member_service import get_tier_for_spending
+from shared.mock_data import MOCK_VIP_PASSENGERS  # centralised in shared/mock_data.py
 
 # ── Màu sắc ──────────────────────────────────────────────────────────────────
 RED       = "#E53935"
@@ -218,6 +219,11 @@ class MemberRow(QWidget):
 # Analytics Card
 # ─────────────────────────────────────────────────────────────────────────────
 class _AnalyticsCard(QFrame):
+    """Analytics card with dynamically recalculated tier distribution."""
+
+    _TIER_ORDER  = ["BẠCH KIM", "HẠNG VÀNG", "HẠNG BẠC", "THÀNH VIÊN"]
+    _TIER_COLORS = ["#1A1A2E",  "#D4AF37",    "#8E9EAB",   "#2E7D32"]
+
     def __init__(self):
         super().__init__()
         self.setStyleSheet(f"""
@@ -228,48 +234,73 @@ class _AnalyticsCard(QFrame):
             }}
         """)
 
-        lay = QVBoxLayout(self)
-        lay.setContentsMargins(24, 28, 24, 28)
-        lay.setSpacing(0)
-        lay.setAlignment(Qt.AlignTop | Qt.AlignHCenter)
+        self._lay = QVBoxLayout(self)
+        self._lay.setContentsMargins(24, 28, 24, 28)
+        self._lay.setSpacing(0)
+        self._lay.setAlignment(Qt.AlignTop | Qt.AlignHCenter)
 
-        lay.addWidget(_MedalIcon(64), 0, Qt.AlignHCenter)
-        lay.addSpacing(16)
+        self._lay.addWidget(_MedalIcon(64), 0, Qt.AlignHCenter)
+        self._lay.addSpacing(16)
 
         title = QLabel("Phân tích Hội viên")
         title.setAlignment(Qt.AlignCenter)
         title.setStyleSheet(f"font-size:18px; font-weight:800; color:{TEXT_DARK};")
-        lay.addWidget(title)
-        lay.addSpacing(8)
+        self._lay.addWidget(title)
+        self._lay.addSpacing(8)
 
         desc = QLabel("Hệ thống tự động xếp hạng dựa trên chi tiêu thực tế và trạng thái kích hoạt tài khoản.")
         desc.setAlignment(Qt.AlignCenter)
         desc.setWordWrap(True)
         desc.setStyleSheet(f"font-size:12px; color:{GRAY_TEXT}; line-height:1.5;")
-        lay.addWidget(desc)
-        lay.addSpacing(24)
+        self._lay.addWidget(desc)
+        self._lay.addSpacing(24)
 
-        # Tier distribution bars
-        tiers = [
-            ("BẠCH KIM",   "#1A1A2E", 18),
-            ("HẠNG VÀNG",  "#D4AF37", 28),
-            ("HẠNG BẠC",   "#8E9EAB", 35),
-            ("THÀNH VIÊN", "#2E7D32", 19),
-        ]
-        for tier_name, color, pct in tiers:
+        # Tier bar rows — store refs for dynamic update
+        self._pct_labels: list[QLabel]       = []
+        self._bars:       list[_ProgressBar] = []
+
+        for tier_name, color in zip(self._TIER_ORDER, self._TIER_COLORS):
             row_lay = QHBoxLayout()
             t_lbl = QLabel(tier_name)
             t_lbl.setStyleSheet(f"font-size:10px; font-weight:600; color:{GRAY_TEXT}; letter-spacing:1px;")
-            p_lbl = QLabel(f"{pct}%")
+            p_lbl = QLabel("—")
             p_lbl.setStyleSheet(f"font-size:11px; font-weight:700; color:{TEXT_MED};")
-            row_lay.addWidget(t_lbl); row_lay.addStretch(); row_lay.addWidget(p_lbl)
-            lay.addLayout(row_lay)
-            lay.addSpacing(4)
-            bar = _ProgressBar(pct, color)
-            lay.addWidget(bar)
-            lay.addSpacing(10)
+            row_lay.addWidget(t_lbl)
+            row_lay.addStretch()
+            row_lay.addWidget(p_lbl)
+            self._lay.addLayout(row_lay)
+            self._lay.addSpacing(4)
+            bar = _ProgressBar(0, color)
+            self._lay.addWidget(bar)
+            self._lay.addSpacing(10)
+            self._pct_labels.append(p_lbl)
+            self._bars.append(bar)
 
-        lay.addStretch()
+        self._lay.addStretch()
+
+        # Render default distribution
+        self.update_data([])
+
+    def update_data(self, passengers: list) -> None:
+        """Recalculate tier distribution from a passenger list.
+        Falls back to hard-coded defaults when the list is empty.
+        """
+        activated = [p for p in passengers if getattr(p, 'is_activated', 0)]
+        if activated:
+            counts = {t: 0 for t in self._TIER_ORDER}
+            for p in activated:
+                tier = get_tier_for_spending(getattr(p, 'total_spending', 0))
+                if tier in counts:
+                    counts[tier] += 1
+            total = len(activated) or 1
+            pcts = [max(0, round(counts[t] / total * 100)) for t in self._TIER_ORDER]
+        else:
+            pcts = [18, 28, 35, 19]   # default
+
+        for p_lbl, bar, pct in zip(self._pct_labels, self._bars, pcts):
+            p_lbl.setText(f"{pct}%")
+            bar._pct = pct
+            bar.update()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -337,7 +368,8 @@ class PassengerPage(QWidget):
         body.setSpacing(16)
         self.build_table()
         body.addWidget(self.table, 70)
-        body.addWidget(_AnalyticsCard(), 30)
+        self._analytics = _AnalyticsCard()
+        body.addWidget(self._analytics, 30)
         self.layout.addLayout(body)
         self.layout.addWidget(_Footer())
 
@@ -371,7 +403,35 @@ class PassengerPage(QWidget):
             }}
             QLineEdit:focus {{ border-color:{RED}; }}
         """)
-        search_row.addWidget(search_icon); search_row.addWidget(self.search)
+        search_row.addWidget(search_icon)
+        search_row.addWidget(self.search)
+
+        # Month filter combo
+        self.month_combo = QComboBox()
+        self.month_combo.addItems([
+            "Tất cả",
+            "Tháng 1",  "Tháng 2",  "Tháng 3",
+            "Tháng 4",  "Tháng 5",  "Tháng 6",
+            "Tháng 7",  "Tháng 8",  "Tháng 9",
+            "Tháng 10", "Tháng 11", "Tháng 12",
+        ])
+        self.month_combo.setFixedHeight(38)
+        self.month_combo.setStyleSheet(f"""
+            QComboBox {{
+                background:{WHITE}; border:1px solid {BORDER};
+                border-radius:10px; padding:0 12px;
+                font-size:12px; font-weight:600; color:{TEXT_DARK};
+            }}
+            QComboBox::drop-down {{ border:none; width:18px; }}
+            QComboBox QAbstractItemView {{
+                background:{WHITE}; border:1px solid {BORDER};
+                selection-background-color:#FFEBEE;
+                selection-color:{RED}; font-size:12px;
+            }}
+        """)
+        self.month_combo.currentIndexChanged.connect(self.load_passengers)
+        search_row.addWidget(self.month_combo)
+
         header.addLayout(search_row)
         self.layout.addLayout(header)
 
@@ -438,10 +498,27 @@ class PassengerPage(QWidget):
         super().showEvent(event)
         self.load_passengers()
 
-    def load_passengers(self):
+    def load_passengers(self, *_):
         MemberRow._instance_count = 0
-        passengers = get_all_passengers_enriched()
-        self.render_rows(passengers)
+
+        # Merge DB data with hard-coded VIP mock data
+        db_passengers = get_all_passengers_enriched()
+        db_emails = {getattr(p, 'email', '') for p in db_passengers}
+        extra_mock = [p for p in MOCK_VIP_PASSENGERS if p.email not in db_emails]
+        all_passengers = list(db_passengers) + extra_mock
+
+        # Filter by selected month (index 0 = "Tất cả")
+        month_idx = self.month_combo.currentIndex()  # 0=all, 1-12 = month number
+        if month_idx > 0:
+            all_passengers = [
+                p for p in all_passengers
+                if getattr(p, 'month', 0) == month_idx
+            ]
+
+        # Update analytics card with the filtered set
+        self._analytics.update_data(all_passengers)
+
+        self.render_rows(all_passengers)
 
     def render_rows(self, passengers):
         MemberRow._instance_count = 0

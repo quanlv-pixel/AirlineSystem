@@ -423,10 +423,10 @@ class SettingsPage(QWidget):
         al.setContentsMargins(22, 20, 22, 20)
         al.setSpacing(18)
 
-        al.addWidget(label("ADMIN PROFILE", 10, 700, C_GRAY))
+        al.addWidget(label("HỒ SƠ QUẢN TRỊ", 10, 700, C_GRAY))
 
         # Full Name Input
-        fn_lbl = label("Full Name", 13, 600)
+        fn_lbl = label("Họ và tên", 13, 600)
         self.name_input = QLineEdit()
         self.name_input.setText(getattr(self.account, "full_name", "") or "")
         self.name_input.setStyleSheet(f"border: 1px solid {C_BORDER}; border-radius: 8px; padding: 8px; background: {C_SOFT};")
@@ -442,7 +442,7 @@ class SettingsPage(QWidget):
         al.addWidget(self.email_input)
 
         # Phone Input
-        ph_lbl = label("Phone", 13, 600)
+        ph_lbl = label("Số điện thoại", 13, 600)
         self.phone_input = QLineEdit()
         self.phone_input.setText(getattr(self.account, "phone", "") or "")
         self.phone_input.setStyleSheet(f"border: 1px solid {C_BORDER}; border-radius: 8px; padding: 8px; background: {C_SOFT};")
@@ -457,12 +457,12 @@ class SettingsPage(QWidget):
         il = QVBoxLayout(interface_card)
         il.setContentsMargins(22, 20, 22, 20)
         il.setSpacing(18)
-        il.addWidget(label("INTERFACE SETTINGS", 10, 700, C_GRAY))
+        il.addWidget(label("GIAO DIỆN HỆ THỐNG", 10, 700, C_GRAY))
 
         # Appearance
         appearance_row = QHBoxLayout()
         appearance_row.addWidget(label("☀", 18))
-        appearance_row.addWidget(label("Appearance", 14, 600))
+        appearance_row.addWidget(label("Giao diện", 14, 600))
         appearance_row.addStretch()
         appearance_row.addWidget(AppearancePicker())
         il.addLayout(appearance_row)
@@ -486,19 +486,19 @@ class SettingsPage(QWidget):
         st.setSpacing(14)
 
         st.addWidget(
-            label("SYSTEM STATUS", 10, 700, C_GRAY)
+            label("TRẠNG THÁI HỆ THỐNG", 10, 700, C_GRAY)
         )
 
         st.addWidget(
             label(
-                "All JetJet core services operating normally.",
+                "Tất cả dịch vụ cốt lõi JetJet đang hoạt động bình thường.",
                 13,
                 400,
                 C_MID
             )
         )
 
-        dot = QLabel("● ONLINE")
+        dot = QLabel("● TRỰC TUYẾN")
 
         dot.setStyleSheet(f"""
             font-size: 12px;

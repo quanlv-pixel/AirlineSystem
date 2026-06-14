@@ -1,26 +1,7 @@
 from datetime import timedelta
 from database.init_db import get_connection
 from shared.api.weather_api import get_weather_by_airport
-
-
-FLIGHT_DURATION={
-
-("HAN","SGN"):125,
-("SGN","HAN"):125,
-
-("HAN","DAD"):80,
-("DAD","HAN"):80,
-
-("SGN","DAD"):90,
-("DAD","SGN"):90,
-
-("SGN","SIN"):130,
-("SIN","SGN"):130,
-
-("HAN","ICN"):300,
-("ICN","HAN"):300
-
-}
+from shared.mock_data import FLIGHT_DURATION  # centralised in shared/mock_data.py
 
 
 def generate_flight_code(dep,dst):

@@ -191,12 +191,12 @@ class Sidebar(QWidget):
 
         # NAVIGATION
         nav_items = [
-            ("📊", "Dashboard", 0),
-            ("✈", "Flights", 1),
-            ("👥", "Passengers", 2),
-            ("🎫", "Bookings", 3),
-            ("📈", "Statistics", 4),
-            ("⚙", "Settings", 5),
+            ("📊", "Tổng quan",  0),
+            ("✈",  "Chuyến bay", 1),
+            ("👥", "Hành khách", 2),
+            ("🎫", "Đặt chỗ",   3),
+            ("📈", "Thống kê",  4),
+            ("⚙",  "Cài đặt",   5),
         ]
 
         self.buttons = {}
@@ -243,7 +243,7 @@ class Sidebar(QWidget):
         layout.addWidget(h_line())
 
         logout_btn = QPushButton(
-            "  ⬅  Logout System"
+            "  ⬅  Thoát hệ thống"
         )
 
         logout_btn.setFixedHeight(50)
@@ -338,7 +338,7 @@ class TopBar(QWidget):
             0
         )
 
-        self.page_title = QLabel("Dashboard")
+        self.page_title = QLabel("Tổng quan")
 
         self.page_title.setStyleSheet(f"""
             font-size: 20px;
@@ -349,7 +349,7 @@ class TopBar(QWidget):
         search = QLineEdit()
 
         search.setPlaceholderText(
-            "Search flights, passengers or bookings..."
+            "Tìm kiếm chuyến bay, hành khách hoặc đặt chỗ..."
         )
 
         search.setFixedWidth(320)
@@ -491,12 +491,12 @@ class MainWindow(QMainWindow):
         self.pages.setCurrentIndex(index)
         self.sidebar.set_active(index)
         labels = [
-            "Dashboard",
-            "Flights",
-            "Passengers",
-            "Bookings",
-            "Statistics",
-            "Settings"
+            "Tổng quan",
+            "Chuyến bay",
+            "Hành khách",
+            "Đặt chỗ",
+            "Thống kê",
+            "Cài đặt",
         ]
         self.topbar.page_title.setText(
             labels[index]

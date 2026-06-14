@@ -5,6 +5,7 @@ ui/pages/booking_page.py
 Trang Quản lý Đặt chỗ — JetJet Management App
 """
 from __future__ import annotations
+import csv
 import random
 import string
 from datetime import datetime
@@ -16,7 +17,7 @@ from PySide6.QtGui import (
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QFrame, QScrollArea, QSizePolicy, QLineEdit, QComboBox,
-    QApplication, QMainWindow, QMessageBox, QSpacerItem
+    QApplication, QMainWindow, QMessageBox, QSpacerItem, QFileDialog
 )
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -533,7 +534,6 @@ class BookingTable(QWidget):
 # Page Header
 # ─────────────────────────────────────────────────────────────────────────────
 class PageHeader(QWidget):
-    new_clicked    = Signal()
     export_clicked = Signal()
 
     def __init__(self, parent=None):
@@ -568,24 +568,7 @@ class PageHeader(QWidget):
             QPushButton:pressed {{ background: {C_BORDER}; }}
         """)
 
-        # Nút ĐẶT CHỖ MỚI
-        new_btn = QPushButton("  +  ĐẶT CHỖ MỚI")
-        new_btn.setFixedHeight(42)
-        new_btn.setCursor(Qt.PointingHandCursor)
-        new_btn.clicked.connect(self.new_clicked)
-        new_btn.setStyleSheet(f"""
-            QPushButton {{
-                background: {C_RED}; border: none;
-                border-radius: 10px; font-size: 12px; font-weight: 800;
-                color: white; padding: 0 20px; letter-spacing: 0.5px;
-            }}
-            QPushButton:hover {{ background: #C62828; }}
-            QPushButton:pressed {{ background: #B71C1C; }}
-        """)
-
         lay.addWidget(export)
-        lay.addSpacing(10)
-        lay.addWidget(new_btn)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -756,7 +739,6 @@ class BookingsPage(QWidget):
 
         # ── Page header ─────────────────────────────────────────────────────
         hdr = PageHeader()
-        hdr.new_clicked.connect(self._on_new)
         hdr.export_clicked.connect(self._on_export)
         root.addWidget(hdr)
 
@@ -827,8 +809,45 @@ class BookingsPage(QWidget):
                                 "Mở form đặt chỗ mới…\n(Tích hợp form sau)")
 
     def _on_export(self):
-        QMessageBox.information(self, "Xuất dữ liệu",
-                                "Đang xuất danh sách đặt chỗ ra file CSV…")
+        """Open a file-save dialog and write the current data as a real CSV."""
+        data_to_export = self._all_data if self._all_data else []
+        if not data_to_export:
+            QMessageBox.warning(self, "Không có dữ liệu", "Danh sách đặt chỗ hiện đang trống.")
+            return
+
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Lưu danh sách đặt chỗ", "danh_sach_dat_cho.csv",
+            "CSV Files (*.csv);;All Files (*)"
+        )
+        if not path:
+            return
+
+        try:
+            with open(path, "w", newline="", encoding="utf-8-sig") as f:
+                writer = csv.writer(f)
+                writer.writerow([
+                    "Mã PNR", "Hành Khách", "Ngày Đặt",
+                    "Chuyến Bay", "Tuyến Bay", "Số Ghế",
+                    "Thanh Toán", "Trạng Thái", "Giá"
+                ])
+                for row in data_to_export:
+                    writer.writerow([
+                        row.get("pnr", ""),
+                        row.get("name", ""),
+                        row.get("date", ""),
+                        row.get("flight", ""),
+                        row.get("route", ""),
+                        row.get("seat", ""),
+                        row.get("payment", ""),
+                        row.get("status", ""),
+                        row.get("price", ""),
+                    ])
+            QMessageBox.information(
+                self, "Xuất thành công",
+                f"Đã xuất {len(data_to_export)} bản ghi ra file:\n{path}"
+            )
+        except Exception as exc:
+            QMessageBox.critical(self, "Lỗi xuất CSV", f"Không thể lưu file:\n{exc}")
 
 
 # ─────────────────────────────────────────────────────────────────────────────

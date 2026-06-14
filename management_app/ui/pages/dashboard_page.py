@@ -1,7 +1,7 @@
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-    QFrame, QPushButton, QScrollArea,
+    QFrame, QPushButton, QScrollArea, QComboBox,
 )
 
 try:
@@ -124,6 +124,25 @@ class StatCard(QWidget):
 # Revenue Chart
 # ─────────────────────────────────────────────────────────────────────────────
 class RevenueChart(QWidget):
+    # 12 months of synthetic weekly-average data (index 0 = all year)
+    _MONTH_DATA = [
+        # All year (avg weekly)
+        [4000, 3000, 2000, 2800, 1900, 2400, 3500],
+        # Jan-Dec monthly snapshots
+        [1200, 1100, 1300, 1000, 950,  1050, 1400],  # T1
+        [1400, 1250, 1300, 1450, 1200, 1350, 1500],  # T2
+        [2200, 2100, 2000, 2300, 2150, 2250, 2400],  # T3
+        [2800, 2600, 2700, 2900, 2750, 2850, 3000],  # T4
+        [3200, 3100, 3000, 3300, 3150, 3250, 3400],  # T5
+        [3800, 3600, 3700, 3900, 3750, 3850, 4000],  # T6
+        [4200, 4000, 4100, 4300, 4150, 4250, 4400],  # T7
+        [3900, 3700, 3800, 4000, 3850, 3950, 4100],  # T8
+        [3400, 3200, 3300, 3500, 3350, 3450, 3600],  # T9
+        [2900, 2700, 2800, 3000, 2850, 2950, 3100],  # T10
+        [3500, 3300, 3400, 3600, 3450, 3550, 3700],  # T11
+        [4500, 4300, 4400, 4600, 4450, 4550, 4700],  # T12
+    ]
+
     def __init__(self):
         super().__init__()
         self.setStyleSheet(f"""
@@ -134,8 +153,8 @@ class RevenueChart(QWidget):
             }}
         """)
 
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(24, 20, 24, 18)
+        self._layout = QVBoxLayout(self)
+        self._layout.setContentsMargins(24, 20, 24, 18)
 
         # Header
         header = QHBoxLayout()
@@ -170,35 +189,55 @@ class RevenueChart(QWidget):
         header.addLayout(title_col)
         header.addStretch()
         header.addWidget(fy_label)
-        layout.addLayout(header)
+        self._layout.addLayout(header)
 
-        # Chart
+        # Canvas placeholder — filled by update_chart()
+        self._canvas_widget = None
+        self._update_chart_data(0)  # 0 = cả năm
+
+    def update_chart(self, month: int):
+        """
+        Refresh chart for the given month index.
+        month=0 means 'cả năm' (all year).
+        """
+        self._update_chart_data(month)
+
+    def _update_chart_data(self, month: int):
+        """Internal: remove old canvas and redraw with new data."""
+        if self._canvas_widget is not None:
+            self._layout.removeWidget(self._canvas_widget)
+            self._canvas_widget.deleteLater()
+            self._canvas_widget = None
+
+        raw_y = self._MONTH_DATA[month] if 0 <= month < len(self._MONTH_DATA) \
+            else self._MONTH_DATA[0]
+
         if HAS_MPL:
             fig = Figure(figsize=(5, 2.8), facecolor="white")
             canvas = FigureCanvas(fig)
             ax = fig.add_subplot(111)
 
             days_x = np.array([0, 1, 2, 3, 4, 5, 6], dtype=float)
-            raw_y  = np.array([4000, 3000, 2000, 2800, 1900, 2400, 3500], dtype=float)
+            y_arr  = np.array(raw_y, dtype=float)
 
             if HAS_SCIPY:
                 x_new = np.linspace(0, 6, 400)
-                spl   = make_interp_spline(days_x, raw_y, k=3)
+                spl   = make_interp_spline(days_x, y_arr, k=3)
                 y_new = spl(x_new)
                 ax.plot(x_new, y_new, color=RED, linewidth=2.8,
                         solid_capstyle="round")
                 ax.fill_between(x_new, y_new, alpha=0.07, color=RED)
             else:
-                days = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"]
-                ax.plot(days, raw_y, color=RED, linewidth=2.8)
-                ax.fill_between(days, raw_y, alpha=0.07, color=RED)
+                days_lbl = ["T2","T3","T4","T5","T6","T7","CN"]
+                ax.plot(days_lbl, y_arr, color=RED, linewidth=2.8)
+                ax.fill_between(days_lbl, y_arr, alpha=0.07, color=RED)
                 days_x = np.arange(7)
 
             ax.set_xticks(np.arange(7))
-            ax.set_xticklabels(["Mon","Tue","Wed","Thu","Fri","Sat","Sun"])
+            ax.set_xticklabels(["T2","T3","T4","T5","T6","T7","CN"])
             ax.set_xlim(-0.1, 6.1)
-            ax.set_ylim(0, 4500)
-            ax.set_yticks([0, 1000, 2000, 3000, 4000])
+            y_max = max(raw_y) * 1.2 or 4500
+            ax.set_ylim(0, y_max)
 
             ax.yaxis.grid(True, color="#F0F0F0", linewidth=1)
             ax.set_axisbelow(True)
@@ -210,12 +249,14 @@ class RevenueChart(QWidget):
 
             ax.tick_params(colors="#9E9E9E", labelsize=9)
             fig.tight_layout(pad=0.6)
-            layout.addWidget(canvas)
+            self._canvas_widget = canvas
         else:
             fallback = QLabel("Cài matplotlib để xem biểu đồ.")
             fallback.setAlignment(Qt.AlignCenter)
             fallback.setStyleSheet(f"color: {GRAY_TEXT}; padding: 40px;")
-            layout.addWidget(fallback)
+            self._canvas_widget = fallback
+
+        self._layout.addWidget(self._canvas_widget)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -373,13 +414,26 @@ class RoutesPanel(QWidget):
                 child.widget().deleteLater()
 
         top_routes = _fetch_top_routes(4)
-        total_count = sum(r["count"] for r in top_routes) or 1
+
+        # Grand total = ALL confirmed/paid bookings in the DB (not just top-4 sum)
+        try:
+            conn = get_connection()
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT COUNT(*) FROM bookings
+                WHERE booking_status IN ('Confirmed', 'Paid')
+            """)
+            grand_total = cursor.fetchone()[0] or 1
+            conn.close()
+        except Exception:
+            grand_total = sum(r["count"] for r in top_routes) or 1
 
         if top_routes:
             for i, r in enumerate(top_routes):
-                pct = max(1, int(round(r["count"] / total_count * 100)))
+                pct = max(1, int(round(r["count"] / grand_total * 100)))
                 color = ROUTE_COLORS[i % len(ROUTE_COLORS)]
-                label = f"{r['count']} booking{'s' if r['count'] != 1 else ''}"
+                cnt   = r['count']
+                label = f"{cnt} đặt chỗ" if cnt != 1 else "1 đặt chỗ"
                 item = RouteItem(r["route"], label, pct, color)
                 self._routes_layout.addWidget(item)
         else:
@@ -445,10 +499,54 @@ class DashboardPage(QWidget):
         cards.addWidget(self._card_revenue)
         layout.addLayout(cards)
 
-        # ── Chart + Routes ──────────────────────────────────────────
+        # ── Chart + Routes ───────────────────────────────────────────────────────
         bottom = QHBoxLayout()
         bottom.setSpacing(18)
-        bottom.addWidget(RevenueChart(), 1)
+
+        # Time-filter combo above the chart
+        chart_col = QVBoxLayout()
+        chart_col.setSpacing(8)
+
+        time_bar = QHBoxLayout()
+        time_lbl = QLabel("📅 Chọn thời gian:")
+        time_lbl.setStyleSheet(f"font-size:12px; font-weight:700; color:{GRAY_TEXT};")
+        self._time_combo = QComboBox()
+        self._time_combo.addItems([
+            "Cả năm",
+            "Tháng 1",  "Tháng 2",  "Tháng 3",
+            "Tháng 4",  "Tháng 5",  "Tháng 6",
+            "Tháng 7",  "Tháng 8",  "Tháng 9",
+            "Tháng 10", "Tháng 11", "Tháng 12",
+        ])
+        self._time_combo.setFixedHeight(30)
+        self._time_combo.setStyleSheet(f"""
+            QComboBox {{
+                background: {WHITE};
+                border: 1px solid {BORDER};
+                border-radius: 8px;
+                padding: 2px 10px;
+                font-size: 12px;
+                font-weight: 600;
+                color: {TEXT_DARK};
+            }}
+            QComboBox::drop-down {{ border: none; width: 18px; }}
+            QComboBox QAbstractItemView {{
+                background: {WHITE};
+                border: 1px solid {BORDER};
+                selection-background-color: #FFEBEE;
+                selection-color: {RED};
+            }}
+        """)
+        time_bar.addWidget(time_lbl)
+        time_bar.addWidget(self._time_combo)
+        time_bar.addStretch()
+        chart_col.addLayout(time_bar)
+
+        self._revenue_chart = RevenueChart()
+        self._time_combo.currentIndexChanged.connect(self._revenue_chart.update_chart)
+        chart_col.addWidget(self._revenue_chart)
+
+        bottom.addLayout(chart_col, 1)
         self._routes_panel = RoutesPanel()
         bottom.addWidget(self._routes_panel)
         layout.addLayout(bottom)

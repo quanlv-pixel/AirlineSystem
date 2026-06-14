@@ -271,10 +271,12 @@ class InformationPage(QWidget):
                 for row in history
                 if str(row.get("status", "")).lower() in paid_statuses
             )
-            total_flights = sum(
-                1 for row in history
+            total_flights = len({
+                row.get("booking_reference", "").split("-")[0]
+                for row in history
                 if str(row.get("status", "")).lower() in paid_statuses
-            )
+                and row.get("booking_reference")
+            })
         except Exception:
             total_spent   = self.account.get("total_spent", 0)
             total_flights = self.account.get("total_flights", 0)
