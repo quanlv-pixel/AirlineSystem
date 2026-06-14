@@ -13,7 +13,8 @@ from booking_app.ui.pages.booking_shared import (lbl, h_sep, card_style,
                              C_BORDER, C_TEXT, C_MID, C_GRAY, C_LGRAY,
                              C_GREEN, C_BLUE, C_ORANGE)
 
-from shared.services.booking_service import get_booking_history_by_user
+from shared.services.booking_service import get_booking_history_by_user, cancel_booking
+from PySide6.QtWidgets import QMessageBox
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -86,10 +87,11 @@ class OrderCard(QWidget):
     inline detail section that shows PNR + all seat labels.
     """
 
-    def __init__(self, order: dict, parent=None):
+    def __init__(self, order: dict, cancel_callback=None, parent=None):
         super().__init__(parent)
         self._expanded = False
         self._order = order
+        self._cancel_callback = cancel_callback
         self.setStyleSheet(card_style(16))
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
@@ -183,6 +185,33 @@ class OrderCard(QWidget):
         """)
         self._detail_btn.clicked.connect(self._toggle_details)
         price_col.addWidget(self._detail_btn)
+
+        # Cancel ticket button — only for pending / confirmed orders
+        if status in ("pending", "confirmed", "chờ thanh toán", "đã xác nhận"):
+            booking_id = order.get("booking_id")
+            cancel_ticket_btn = QPushButton("🚫  Hủy vé")
+            cancel_ticket_btn.setFixedHeight(30)
+            cancel_ticket_btn.setCursor(Qt.PointingHandCursor)
+            cancel_ticket_btn.setStyleSheet(f"""
+                QPushButton {{
+                    background: transparent;
+                    border: 1.5px solid {C_RED};
+                    border-radius: 8px;
+                    font-size: 11px;
+                    font-weight: 700;
+                    color: {C_RED};
+                    padding: 0 10px;
+                }}
+                QPushButton:hover {{
+                    background: #FFEBEE;
+                }}
+            """)
+            if self._cancel_callback and booking_id is not None:
+                cancel_ticket_btn.clicked.connect(
+                    lambda checked=False, bid=booking_id: self._cancel_callback(bid)
+                )
+            price_col.addWidget(cancel_ticket_btn)
+
         top_lay.addLayout(price_col)
 
         self._root.addWidget(top_w)
@@ -454,12 +483,30 @@ class HistoryPage(QWidget):
             if search_txt and search_txt not in haystack:
                 continue
 
-            card = OrderCard(order)
+            card = OrderCard(order, cancel_callback=self.handle_cancel_ticket)
             self.list_lay.addWidget(card)
             visible_count += 1
 
         self.list_lay.addStretch()
         self.empty_lbl.setVisible(visible_count == 0)
+
+    # ─────────────────────────────────────────────────────────────────────────────
+    def handle_cancel_ticket(self, booking_id: int):
+        """Ask for confirmation, cancel the booking, then refresh the list."""
+        reply = QMessageBox.question(
+            self,
+            "Xác nhận hủy vé",
+            "Bạn có chắc muốn hủy vé này? Hành động này không thể hoàn tác.",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        if reply == QMessageBox.Yes:
+            ok = cancel_booking(booking_id)
+            if ok:
+                QMessageBox.information(self, "Thành công", "Đã hủy vé thành công.")
+            else:
+                QMessageBox.warning(self, "Lỗi", "Không thể hủy vé. Vui lòng thử lại.")
+            self.refresh()
 
 
 # ─────────────────────────────────────────────────────────────────────────────

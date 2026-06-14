@@ -79,10 +79,12 @@ class _VSep(QFrame):
 # ─────────────────────────────────────────────────────────────────────────────
 class FlightRow(QWidget):
     def __init__(self, code, aircraft, departure, arrival,
-                 percent, status, status_color, flight=None, edit_callback=None):
+                 percent, status, status_color, flight=None, edit_callback=None,
+                 cancel_callback=None):
         super().__init__()
         self.flight = flight
         self.edit_callback = edit_callback
+        self.cancel_callback = cancel_callback
         self.setFixedHeight(72)
         self.setStyleSheet("background: transparent;")
 
@@ -250,6 +252,23 @@ class FlightRow(QWidget):
             action_btn.clicked.connect(lambda: self.edit_callback(self.flight))
 
         action_l.addWidget(action_btn)
+
+        # Cancel button — hidden/disabled when already Canceled
+        cancel_btn = QPushButton("✕")
+        cancel_btn.setFixedSize(26, 26)
+        is_canceled = (status == "Canceled")
+        cancel_btn.setEnabled(not is_canceled)
+        cancel_btn.setStyleSheet(f"""
+            color: {'#9CA3AF' if is_canceled else '#E53935'};
+            font-size: 13px;
+            font-weight: 700;
+            border: 1.5px solid {'#D1D5DB' if is_canceled else '#FECACA'};
+            border-radius: 13px;
+            background: {'#F9FAFB' if is_canceled else '#FFF5F5'};
+        """)
+        if self.cancel_callback and self.flight and not is_canceled:
+            cancel_btn.clicked.connect(lambda: self.cancel_callback(self.flight))
+        action_l.addWidget(cancel_btn)
 
         lay.addWidget(action_w, 5)
 
@@ -517,8 +536,10 @@ class FlightsPage(QWidget):
                 flights = get_all_flights()
             except Exception:
                 flights = []
+            # Only use fallback when DB returns nothing on initial load
             if not flights:
                 flights = FALLBACK_FLIGHTS
+        # If flights was explicitly passed (e.g. empty search result), use it as-is
 
         # Xoá hàng cũ
         while self.rows_layout.count():
@@ -580,7 +601,8 @@ class FlightsPage(QWidget):
                 code, aircraft, dep, dst,
                 percent, status, status_color,
                 flight=flight,
-                edit_callback=self.open_edit_dialog
+                edit_callback=self.open_edit_dialog,
+                cancel_callback=self.handle_cancel_flight
             )
             self.rows_layout.addWidget(row)
 
@@ -635,11 +657,30 @@ class FlightsPage(QWidget):
         dialog = FlightDialog(parent=self)
         if dialog.exec() == QDialog.Accepted:
             self.load_flights()
-            
+
     def open_edit_dialog(self, flight):
         dialog = FlightDialog(flight=flight, parent=self)
         if dialog.exec() == QDialog.Accepted:
             self.load_flights()
+
+    def handle_cancel_flight(self, flight):
+        from shared.services.flight_service import update_flight
+        flight_id = getattr(flight, 'flight_id', None) or (flight.get('flight_id') if isinstance(flight, dict) else None)
+        code = getattr(flight, 'flight_number', None) or (flight.get('flight_number', '?') if isinstance(flight, dict) else '?')
+        reply = QMessageBox.question(
+            self,
+            "Xác nhận hủy chuyến bay",
+            f"Bạn có chắc muốn hủy chuyến bay {code}?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+        if reply == QMessageBox.Yes:
+            ok = update_flight(flight_id, status="Canceled")
+            if ok:
+                QMessageBox.information(self, "Thành công", f"Chuyến bay {code} đã bị hủy.")
+            else:
+                QMessageBox.warning(self, "Lỗi", "Không thể hủy chuyến bay.")
+            self.handle_search()
             
     def export_csv(self):
         flights = get_all_flights()

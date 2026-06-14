@@ -33,12 +33,15 @@ from shared.services.flight_service import (
 
 from shared.services.passenger_service import (
     get_total_passengers,
+    get_all_passengers_enriched,
 )
 
 from shared.services.booking_service import (
     get_total_revenue,
     get_total_bookings,
 )
+
+from shared.mock_data import MOCK_VIP_PASSENGERS
 
 
 # COLORS
@@ -634,7 +637,17 @@ class StatisticsPage(QWidget):
 
         try:
 
-            self.total_revenue = get_total_revenue()
+            # Build merged passenger list (DB + deduplicated mock VIPs)
+            db_passengers = get_all_passengers_enriched()
+            db_emails = {getattr(p, "email", None) for p in db_passengers}
+            extra_mock = [
+                p for p in MOCK_VIP_PASSENGERS
+                if getattr(p, "email", None) not in db_emails
+            ]
+            all_passengers = db_passengers + extra_mock
+            self.total_revenue = sum(
+                getattr(p, "total_spending", 0) for p in all_passengers
+            )
 
             self.total_flights = get_total_flights()
 

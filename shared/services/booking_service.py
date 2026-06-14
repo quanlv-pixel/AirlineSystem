@@ -113,3 +113,41 @@ def get_booking_history_by_user(username: str):
         return []
     finally:
         conn.close()
+
+
+def cancel_booking(booking_id: int) -> bool:
+    """
+    Marks a booking as Cancelled and releases its seat back to inventory.
+    Returns True on success, False on failure.
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        # Fetch flight_id and seat_number before updating
+        cursor.execute(
+            "SELECT flight_id, seat_number FROM bookings WHERE booking_id = ?",
+            (booking_id,)
+        )
+        row = cursor.fetchone()
+        if row is None:
+            return False
+        flight_id   = row["flight_id"]
+        seat_number = row["seat_number"]
+
+        # Mark booking as Cancelled
+        cursor.execute(
+            "UPDATE bookings SET booking_status = 'Cancelled' WHERE booking_id = ?",
+            (booking_id,)
+        )
+        conn.commit()
+
+        # Free the seat in the flight's seat map
+        from shared.services.seat_service import release_seat
+        release_seat(flight_id, seat_number)
+
+        return True
+    except Exception as e:
+        print(f"[Service Error] cancel_booking: {e}")
+        return False
+    finally:
+        conn.close()

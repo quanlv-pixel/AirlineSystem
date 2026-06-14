@@ -334,6 +334,7 @@ class SettingsPage(QWidget):
         content = QWidget()
 
         scroll.setWidget(content)
+        self.content_widget = content
 
         root = QVBoxLayout(content)
 
@@ -419,6 +420,7 @@ class SettingsPage(QWidget):
         # ADMIN PROFILE SECTION
         admin_card = QWidget()
         admin_card.setStyleSheet(card_style())
+        self.admin_card = admin_card
         al = QVBoxLayout(admin_card)
         al.setContentsMargins(22, 20, 22, 20)
         al.setSpacing(18)
@@ -454,6 +456,7 @@ class SettingsPage(QWidget):
         # INTERFACE SETTINGS (Only Appearance)
         interface_card = QWidget()
         interface_card.setStyleSheet(card_style())
+        self.interface_card = interface_card
         il = QVBoxLayout(interface_card)
         il.setContentsMargins(22, 20, 22, 20)
         il.setSpacing(18)
@@ -464,7 +467,9 @@ class SettingsPage(QWidget):
         appearance_row.addWidget(label("☀", 18))
         appearance_row.addWidget(label("Giao diện", 14, 600))
         appearance_row.addStretch()
-        appearance_row.addWidget(AppearancePicker())
+        self.theme_picker = AppearancePicker()
+        self.theme_picker.mode_changed.connect(self.apply_theme)
+        appearance_row.addWidget(self.theme_picker)
         il.addLayout(appearance_row)
 
         left.addWidget(interface_card)
@@ -478,6 +483,7 @@ class SettingsPage(QWidget):
         status = QWidget()
 
         status.setStyleSheet(card_style())
+        self.status_card = status
 
         st = QVBoxLayout(status)
 
@@ -563,3 +569,44 @@ class SettingsPage(QWidget):
             self.account.phone = phone
         else:
             QMessageBox.warning(self, "Lỗi", "Đã có lỗi xảy ra khi lưu thông tin.")
+
+    def apply_theme(self, mode: str):
+        """Dynamically switch between dark and light mode styles."""
+        if mode == "dark":
+            # Page background
+            self.setStyleSheet("background: #111827;")
+            self.content_widget.setStyleSheet("background: #111827;")
+
+            # Cards
+            dark_card = "background: #1F2937; border: 1px solid #374151; border-radius: 18px;"
+            self.admin_card.setStyleSheet(dark_card)
+            self.interface_card.setStyleSheet(dark_card)
+            self.status_card.setStyleSheet(dark_card)
+
+            # Inputs
+            dark_input = (
+                "background: #374151; color: white;"
+                " border: 1px solid #4B5563; border-radius: 8px; padding: 8px;"
+            )
+            self.name_input.setStyleSheet(dark_input)
+            self.email_input.setStyleSheet(dark_input)
+            self.phone_input.setStyleSheet(dark_input)
+
+        else:  # light
+            # Page background
+            self.setStyleSheet(f"background: {C_BG};")
+            self.content_widget.setStyleSheet("")
+
+            # Cards
+            self.admin_card.setStyleSheet(card_style())
+            self.interface_card.setStyleSheet(card_style())
+            self.status_card.setStyleSheet(card_style())
+
+            # Inputs (original style)
+            orig_input = (
+                f"border: 1px solid {C_BORDER}; border-radius: 8px;"
+                f" padding: 8px; background: {C_SOFT};"
+            )
+            self.name_input.setStyleSheet(orig_input)
+            self.email_input.setStyleSheet(orig_input)
+            self.phone_input.setStyleSheet(orig_input)

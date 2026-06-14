@@ -174,20 +174,23 @@ class FlightDialog(QDialog):
         return inp
 
     def handle_save(self):
-        f_code = generate_flight_code(dep, arr)
-        dep=self.dep_input.currentText()
-        arr=self.arr_input.currentText()
+        dep = self.dep_input.currentText()
+        arr = self.arr_input.currentText()
+        if not self.is_edit_mode:
+            f_code = generate_flight_code(dep, arr)
+        else:
+            f_code = getattr(self.flight, 'flight_number', '')
         d_time = self.dep_time.dateTime().toString("yyyy-MM-dd HH:mm:ss")
-        duration=calculate_duration(dep, arr)
-        delay=get_delay(dep)
+        duration = calculate_duration(dep, arr)
+        delay = get_delay(dep)
 
-        minutes=duration+delay
+        minutes = duration + delay
 
-        arrival=self.dep_time.dateTime()
+        arrival = self.dep_time.dateTime()
 
-        arrival=arrival.addSecs(minutes*60)
+        arrival = arrival.addSecs(minutes * 60)
 
-        a_time=arrival.toString("yyyy-MM-dd HH:mm:ss")
+        a_time = arrival.toString("yyyy-MM-dd HH:mm:ss")
 
         seats = self.seats_input.value()
 
@@ -200,7 +203,7 @@ class FlightDialog(QDialog):
                 flight_id=self.flight.flight_id,
                 departure_time=d_time,
                 arrival_time=a_time,
-                status="Scheduled" 
+                status="scheduled"
             )
             if success:
                 QMessageBox.information(self, "Thành công", "Đã cập nhật chuyến bay!")
