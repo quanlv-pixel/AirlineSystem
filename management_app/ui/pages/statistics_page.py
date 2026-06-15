@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from shared.services.passenger_service import get_all_passengers_enriched
+from shared.mock_data import MOCK_VIP_PASSENGERS
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QWidget,
@@ -634,39 +636,27 @@ class StatisticsPage(QWidget):
         layout.addLayout(footer)
 
     def load_statistics(self):
-
         try:
-
-            # Build merged passenger list (DB + deduplicated mock VIPs)
+            # 1. Đồng bộ tổng doanh thu từ chi tiêu của toàn bộ khách hàng (DB + Mock)
             db_passengers = get_all_passengers_enriched()
-            db_emails = {getattr(p, "email", None) for p in db_passengers}
-            extra_mock = [
-                p for p in MOCK_VIP_PASSENGERS
-                if getattr(p, "email", None) not in db_emails
-            ]
-            all_passengers = db_passengers + extra_mock
-            self.total_revenue = sum(
-                getattr(p, "total_spending", 0) for p in all_passengers
-            )
+            db_emails = {getattr(p, 'email', '') for p in db_passengers}
+            extra_mock = [p for p in MOCK_VIP_PASSENGERS if getattr(p, 'email', '') not in db_emails]
+            all_passengers = list(db_passengers) + extra_mock
 
+            self.total_revenue = sum(getattr(p, "total_spending", 0) for p in all_passengers)
+
+            # 2. Lấy các thông số còn lại
             self.total_flights = get_total_flights()
-
             self.total_passengers = get_total_passengers()
-
             self.total_bookings = get_total_bookings()
-
             self.load_factor = get_average_load_factor()
 
-        except:
-
+        except Exception as e:
+            print(f"Lỗi load_statistics: {e}")
             self.total_revenue = 4800000
-
             self.total_flights = 12842
-
             self.total_passengers = 324000
-
             self.total_bookings = 9500
-
             self.load_factor = 82
 
     def _on_time_filter(self, index: int) -> None:
