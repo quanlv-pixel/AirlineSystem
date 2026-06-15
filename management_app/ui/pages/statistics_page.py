@@ -655,6 +655,7 @@ class StatisticsPage(QWidget):
             print(f"Lỗi load_statistics: {e}")
             self.total_revenue = 4800000
             self.total_flights = 12842
+            self.total_bookings = 9500
             self.total_passengers = 324000
             self.total_bookings = 9500
             self.load_factor = 82
