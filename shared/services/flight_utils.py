@@ -7,23 +7,17 @@ from shared.mock_data import FLIGHT_DURATION  # centralised in shared/mock_data.
 def generate_flight_code(dep,dst):
 
     conn=get_connection()
-
     cursor=conn.cursor()
 
     prefix=f"JJ{dep}{dst}"
 
     cursor.execute("""
-
     SELECT COUNT(*)
-
     FROM flights
-
     WHERE flight_number LIKE ?
-
     """,(f"{prefix}%",))
 
     count=cursor.fetchone()[0]+1
-
     conn.close()
 
     return f"{prefix}{count:03d}"

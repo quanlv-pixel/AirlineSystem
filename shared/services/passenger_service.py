@@ -15,11 +15,9 @@ def _row_to_passenger(row) -> Passenger:
         nationality=row[4],
         phone=row[5],
         email=row[6],
-
-        member_rank=row[7],      # thêm
+        member_rank=row[7],      
         passport_number=row[8],
-        total_spending=row[9],   # thêm
-
+        total_spending=row[9],   
         created_at=row[10],
     )
 

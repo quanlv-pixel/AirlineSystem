@@ -185,13 +185,9 @@ class FlightDialog(QDialog):
         delay = get_delay(dep)
 
         minutes = duration + delay
-
         arrival = self.dep_time.dateTime()
-
         arrival = arrival.addSecs(minutes * 60)
-
         a_time = arrival.toString("yyyy-MM-dd HH:mm:ss")
-
         seats = self.seats_input.value()
 
         if not f_code or not dep or not arr:
