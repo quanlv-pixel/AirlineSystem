@@ -3,7 +3,7 @@ from collections import namedtuple
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QFrame, QLineEdit, QScrollArea, QComboBox, QFileDialog, QMessageBox, QDialog
+    QFrame, QLineEdit, QScrollArea, QComboBox, QFileDialog, QMessageBox, QDialog, QSizePolicy
 )
 import csv
 from management_app.ui.dialogs.flight_dialog import FlightDialog
@@ -58,10 +58,7 @@ FALLBACK_FLIGHTS = [
     _FL("JJ401", "ATR 72",         "PQC", "SGN", 12, "Scheduled"),
 ]
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Separator dọc
-# ─────────────────────────────────────────────────────────────────────────────
+# ── Separator dọc ─────────────────────────────────────────────────────────────
 class _VSep(QFrame):
     def __init__(self):
         super().__init__()
@@ -70,9 +67,7 @@ class _VSep(QFrame):
         self.setFixedHeight(22)
         self.setStyleSheet(f"background: {BORDER}; border: none;")
 
-# ─────────────────────────────────────────────────────────────────────────────
-# RECOVERY DIALOG (Thùng Rác)
-# ─────────────────────────────────────────────────────────────────────────────
+# ── RECOVERY DIALOG (Thùng Rác) ────────────────────────────────────────────────
 class RecoveryDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -83,7 +78,6 @@ class RecoveryDialog(QDialog):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
 
-        # Header
         header = QWidget()
         header.setStyleSheet(f"background: {WHITE}; border-bottom: 1px solid {BORDER};")
         header.setFixedHeight(50)
@@ -93,7 +87,6 @@ class RecoveryDialog(QDialog):
         h_lay.addWidget(title)
         layout.addWidget(header)
 
-        # Scroll Area
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.NoFrame)
@@ -112,14 +105,12 @@ class RecoveryDialog(QDialog):
         self.load_canceled_flights()
 
     def load_canceled_flights(self):
-        # Clear layout
         while self.content_layout.count():
             item = self.content_layout.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
 
         flights = get_all_flights()
-        # Lọc ra các chuyến bay có status là Canceled
         canceled = [f for f in flights if getattr(f, "status", "") == "Canceled"]
 
         if not canceled:
@@ -162,12 +153,7 @@ class RecoveryDialog(QDialog):
             self.load_canceled_flights()
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Flight Row
-# ─────────────────────────────────────────────────────────────────────────────
-# ─────────────────────────────────────────────────────────────────────────────
-# Flight Row
-# ─────────────────────────────────────────────────────────────────────────────
+# ── Flight Row ─────────────────────────────────────────────────────────────
 class FlightRow(QWidget):
     def __init__(self, code, aircraft, departure, arrival,
                  percent, status, status_color, flight=None, edit_callback=None,
@@ -177,24 +163,21 @@ class FlightRow(QWidget):
         self.edit_callback = edit_callback
         self.cancel_callback = cancel_callback
         
-        # 1. QUAN TRỌNG: Cho phép Widget tự do co giãn chiều cao
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
         self.setStyleSheet("background: transparent;")
 
-        # 2. Chuyển layout gốc thành Dọc (VBox) và dồn content lên trên
         base_lay = QVBoxLayout(self)
         base_lay.setContentsMargins(0, 0, 0, 0)
         base_lay.setSpacing(0)
         base_lay.setAlignment(Qt.AlignTop) 
 
-        # Khung chứa thông tin chính (ngang)
         main_container = QWidget()
-        main_container.setFixedHeight(72) # Chỉ cố định chiều cao phần thông tin
+        main_container.setFixedHeight(72)
         lay = QHBoxLayout(main_container)
         lay.setContentsMargins(20, 0, 20, 0)
         lay.setSpacing(0)
 
-        # ── THÔNG TIN (icon + code + aircraft) ──────────────────────────────
+        # THÔNG TIN
         info_w = QWidget(); info_w.setStyleSheet("background:transparent;")
         info_l = QHBoxLayout(info_w)
         info_l.setContentsMargins(0, 0, 0, 0)
@@ -238,7 +221,7 @@ class FlightRow(QWidget):
 
         lay.addWidget(info_w, 35)
 
-        # ── TUYẾN BAY (dep + dst) ────────────────────────────────────────────
+        # TUYẾN BAY
         route_w = QWidget(); route_w.setStyleSheet("background:transparent;")
         route_l = QHBoxLayout(route_w)
         route_l.setContentsMargins(0, 0, 0, 0)
@@ -257,7 +240,7 @@ class FlightRow(QWidget):
 
         lay.addWidget(route_w, 18)
 
-        # ── LƯỢNG KHÁCH (bar + percent) ──────────────────────────────────────
+        # LƯỢNG KHÁCH
         occ_w = QWidget(); occ_w.setStyleSheet("background:transparent;")
         occ_l = QHBoxLayout(occ_w)
         occ_l.setContentsMargins(0, 0, 0, 0)
@@ -285,7 +268,7 @@ class FlightRow(QWidget):
 
         lay.addWidget(occ_w, 22)
 
-        # ── TRẠNG THÁI (badge + ▼) ───────────────────────────────────────────
+        # TRẠNG THÁI
         vi_label, fg, bg = _status_info(status)
 
         badge_outer = QWidget(); badge_outer.setStyleSheet("background:transparent;")
@@ -311,7 +294,6 @@ class FlightRow(QWidget):
             font-weight: 700;
         """)
 
-        # Biến ▼ thành nút bấm
         drop_btn = QPushButton("▼")
         drop_btn.setFixedSize(16, 16)
         drop_btn.setCursor(Qt.PointingHandCursor)
@@ -330,21 +312,11 @@ class FlightRow(QWidget):
 
         lay.addWidget(badge_outer, 20)
 
-        # ── THAO TÁC ────────────────────────────────────────────────────────
+        # THAO TÁC
         action_w = QWidget(); action_w.setStyleSheet("background:transparent;")
         action_l = QHBoxLayout(action_w)
         action_l.setContentsMargins(0, 0, 0, 0)
         action_l.setAlignment(Qt.AlignCenter)
-
-        action_lbl = QLabel("↺")
-        action_lbl.setFixedSize(26, 26)
-        action_lbl.setAlignment(Qt.AlignCenter)
-        action_lbl.setStyleSheet(f"""
-            color: {GRAY_TEXT};
-            font-size: 14px;
-            border: 1.5px solid {BORDER};
-            border-radius: 13px;
-        """)
         
         action_btn = QPushButton("✎")
         action_btn.setFixedSize(26, 26)
@@ -361,7 +333,6 @@ class FlightRow(QWidget):
 
         action_l.addWidget(action_btn)
 
-        # Nút Hủy (X)
         cancel_btn = QPushButton("✕")
         cancel_btn.setFixedSize(26, 26)
         cancel_btn.setCursor(Qt.PointingHandCursor)
@@ -383,7 +354,7 @@ class FlightRow(QWidget):
 
         base_lay.addWidget(main_container)
 
-        # ── KHUNG LÝ DO DELAY (Ẩn theo mặc định) ────────────────────────────
+        # LÝ DO DELAY
         self.reason_container = QWidget()
         self.reason_container.hide()
         reason_lay = QVBoxLayout(self.reason_container)
@@ -402,7 +373,6 @@ class FlightRow(QWidget):
         reason_lay.addWidget(self.reason_lbl)
         base_lay.addWidget(self.reason_container)
 
-        # Xử lý Logic thời tiết nếu chuyến bay bị Delayed
         if status == "Delayed":
             weather = get_weather_by_airport(departure)
             reason_text = (f"Lý do chậm chuyến: Thời tiết tại sân bay {departure} - "
@@ -418,8 +388,6 @@ class FlightRow(QWidget):
             self.reason_container.show()
         else:
             self.reason_container.hide()
-            
-        # 3. QUAN TRỌNG: Ép layout tính toán lại không gian ngay lập tức để không bị đè
         self.adjustSize()
 
     def mouseDoubleClickEvent(self, event):
@@ -428,9 +396,7 @@ class FlightRow(QWidget):
         super().mouseDoubleClickEvent(event)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Flights Page
-# ─────────────────────────────────────────────────────────────────────────────
+# ── Flights Page ─────────────────────────────────────────────────────────────
 class FlightsPage(QWidget):
     def __init__(self):
         super().__init__()
@@ -453,7 +419,6 @@ class FlightsPage(QWidget):
         layout.setContentsMargins(28, 20, 28, 28)
         layout.setSpacing(16)
 
-        # ── Header nhỏ: nút xuất, khôi phục + thêm ─────────────────────
         action_bar = QHBoxLayout()
         action_bar.setSpacing(10)
         action_bar.addStretch()
@@ -474,7 +439,6 @@ class FlightsPage(QWidget):
             QPushButton:hover {{ background: {GRAY_BG}; }}
         """)
 
-        # Nút Khôi phục (Mới)
         self.recover_btn = QPushButton("↺ Thùng rác")
         self.recover_btn.setFixedHeight(36)
         self.recover_btn.setCursor(Qt.PointingHandCursor)
@@ -516,7 +480,6 @@ class FlightsPage(QWidget):
         action_bar.addWidget(self.add_btn)
         layout.addLayout(action_bar)
 
-        # ── Search + Filter bar ───────────────────────────────────────────────
         search_frame = QFrame()
         search_frame.setFixedHeight(56)
         search_frame.setStyleSheet(f"""
@@ -531,16 +494,12 @@ class FlightsPage(QWidget):
         sl.setContentsMargins(16, 0, 16, 0)
         sl.setSpacing(12)
 
-        # Biểu tượng tìm kiếm
         search_icon = QLabel("🔍")
         search_icon.setStyleSheet(f"font-size: 14px; color: {GRAY_TEXT};")
         sl.addWidget(search_icon)
 
-        # Input tìm kiếm
         self.search_input = QLineEdit()
-        self.search_input.setPlaceholderText(
-            "Tìm theo Mã chuyến hoặc Tuyến bay..."
-        )
+        self.search_input.setPlaceholderText("Tìm theo Mã chuyến hoặc Tuyến bay...")
         self.search_input.setFrame(False)
         self.search_input.setStyleSheet(f"""
             QLineEdit {{
@@ -554,7 +513,6 @@ class FlightsPage(QWidget):
 
         sl.addWidget(_VSep())
 
-        # Nút chuyển chế độ xem (trang trí)
         for icon in ("☰", "⊞"):
             btn = QPushButton(icon)
             btn.setFixedSize(30, 30)
@@ -572,7 +530,6 @@ class FlightsPage(QWidget):
 
         sl.addWidget(_VSep())
 
-        # Label trạng thái
         status_lbl = QLabel("Trạng thái:")
         status_lbl.setStyleSheet(f"""
             font-size: 13px;
@@ -581,7 +538,6 @@ class FlightsPage(QWidget):
         """)
         sl.addWidget(status_lbl)
 
-        # Filter dropdown (BỎ TÙY CHỌN CANCELED ĐI)
         self.filter_box = QComboBox()
         self.filter_box.addItems([
             "Tất cả", "Scheduled", "Boarding", "Delayed",
@@ -622,7 +578,6 @@ class FlightsPage(QWidget):
 
         sl.addWidget(_VSep())
 
-        # Nút refresh
         refresh_btn = QPushButton("↺")
         refresh_btn.setFixedSize(30, 30)
         refresh_btn.setStyleSheet(f"""
@@ -640,7 +595,6 @@ class FlightsPage(QWidget):
 
         layout.addWidget(search_frame)
 
-        # ── Table ─────────────────────────────────────────────────────────────
         self.table = QFrame()
         self.table.setStyleSheet(f"""
             QFrame {{
@@ -654,7 +608,6 @@ class FlightsPage(QWidget):
         table_l.setContentsMargins(0, 0, 0, 8)
         table_l.setSpacing(0)
 
-        # Header row
         hdr_row = QWidget()
         hdr_row.setFixedHeight(48)
         hdr_row.setStyleSheet("background: transparent;")
@@ -679,14 +632,12 @@ class FlightsPage(QWidget):
 
         table_l.addWidget(hdr_row)
 
-        # Đường kẻ dưới header
         sep = QFrame()
         sep.setFrameShape(QFrame.HLine)
         sep.setFixedHeight(1)
         sep.setStyleSheet(f"background: {BORDER}; border: none;")
         table_l.addWidget(sep)
 
-        # Vùng chứa các hàng
         self.rows_layout = QVBoxLayout()
         self.rows_layout.setSpacing(0)
         self.rows_layout.setContentsMargins(0, 0, 0, 0)
@@ -694,14 +645,11 @@ class FlightsPage(QWidget):
 
         layout.addWidget(self.table)
 
-        # ── Signals ──────────────────────────────────────────────────────────
         self.search_input.textChanged.connect(self.handle_search)
         self.filter_box.currentTextChanged.connect(self.handle_search)
 
-        # ── Load data ────────────────────────────────────────────────────────
         self.load_flights()
 
-    # ── Load flights ─────────────────────────────────────────────────────────
     def load_flights(self, flights=None):
         if flights is None:
             try:
@@ -711,7 +659,6 @@ class FlightsPage(QWidget):
             if not flights:
                 flights = FALLBACK_FLIGHTS
 
-        # Xoá hàng cũ
         while self.rows_layout.count():
             item = self.rows_layout.takeAt(0)
             if item.widget():
@@ -723,14 +670,12 @@ class FlightsPage(QWidget):
         for flight in flights:
             status = flight.get("status") if isinstance(flight, dict) else getattr(flight, "status", "Scheduled")
             
-            # LOGIC QUAN TRỌNG: Ẩn tuyệt đối các chuyến bị Canceled khỏi màn hình chính
             if status == "Canceled":
                 continue
 
             if selected_status != "Tất cả" and status != selected_status:
                 continue
 
-            # Đọc dữ liệu
             if isinstance(flight, dict):
                 percent_raw  = flight.get("occupancy_percent")
                 if percent_raw is None:
@@ -788,7 +733,6 @@ class FlightsPage(QWidget):
             empty.setStyleSheet(f"color: {GRAY_TEXT}; font-size: 14px; padding: 40px;")
             self.rows_layout.addWidget(empty)
 
-    # ── Handle search ────────────────────────────────────────────────────────
     def handle_search(self):
         keyword = self.search_input.text().strip()
 
@@ -828,7 +772,6 @@ class FlightsPage(QWidget):
     def open_recovery_dialog(self):
         dialog = RecoveryDialog(parent=self)
         dialog.exec()
-        # Refresh lại màn hình chính sau khi đóng popup
         self.load_flights()
 
     def handle_cancel_flight(self, flight):

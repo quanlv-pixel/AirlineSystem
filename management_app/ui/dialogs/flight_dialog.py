@@ -10,7 +10,8 @@ from PySide6.QtWidgets import QComboBox
 from shared.services.flight_utils import (
     generate_flight_code,
     calculate_duration,
-    get_delay
+    get_delay,
+    calculate_price
 )
 
 from datetime import timedelta
@@ -111,11 +112,11 @@ class FlightDialog(QDialog):
             self.code_input.setStyleSheet(self._input_style(readonly=True))
             
             self.dep_input.setCurrentText(getattr(self.flight, 'departure', ''))
-            self.dep_input.setReadOnly(True)
+            self.dep_input.setEnabled(False)
             self.dep_input.setStyleSheet(self._input_style(readonly=True))
             
             self.arr_input.setCurrentText(getattr(self.flight, 'destination', ''))
-            self.arr_input.setReadOnly(True)
+            self.arr_input.setEnabled(False)
             self.arr_input.setStyleSheet(self._input_style(readonly=True))
             
             # Format: 'yyyy-MM-dd HH:mm:ss'
@@ -215,7 +216,7 @@ class FlightDialog(QDialog):
                 departure_time=d_time,
                 arrival_time=a_time,
                 total_seats=seats,
-                ticket_price=0,
+                ticket_price=calculate_price(dep, arr),
                 aircraft="A320",
                 gate="G1",
                 terminal="T1"

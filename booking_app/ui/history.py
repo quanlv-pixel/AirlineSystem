@@ -39,7 +39,7 @@ def _group_by_pnr(raw_rows: list[dict]) -> list[dict]:
         seats = [str(r.get("seats", "")).strip() for r in rows if r.get("seats")]
         result.append({
             "base_pnr":          base_pnr,
-            "booking_id":        first.get("booking_id"),
+            "booking_ids":       [r.get("booking_id") for r in rows],
             "booking_date":      first.get("booking_date", "—"),
             "status":            first.get("status", "pending"),
             "flight_code":       first.get("flight_code", "—"),
@@ -188,7 +188,7 @@ class OrderCard(QWidget):
 
         # Cancel ticket button — only for pending / confirmed orders
         if status in ("pending", "confirmed", "chờ thanh toán", "đã xác nhận"):
-            booking_id = order.get("booking_id")
+            booking_ids = order.get("booking_ids", [])
             cancel_ticket_btn = QPushButton("🚫  Hủy vé")
             cancel_ticket_btn.setFixedHeight(30)
             cancel_ticket_btn.setCursor(Qt.PointingHandCursor)
@@ -206,9 +206,9 @@ class OrderCard(QWidget):
                     background: #FFEBEE;
                 }}
             """)
-            if self._cancel_callback and booking_id is not None:
+            if self._cancel_callback and booking_ids:
                 cancel_ticket_btn.clicked.connect(
-                    lambda checked=False, bid=booking_id: self._cancel_callback(bid)
+                    lambda checked=False, bids=booking_ids: self._cancel_callback(bids)
                 )
             price_col.addWidget(cancel_ticket_btn)
 
@@ -491,21 +491,23 @@ class HistoryPage(QWidget):
         self.empty_lbl.setVisible(visible_count == 0)
 
     # ─────────────────────────────────────────────────────────────────────────────
-    def handle_cancel_ticket(self, booking_id: int):
+    def handle_cancel_ticket(self, booking_ids: list[int]): # <--- NHẬN MẢNG ID
         """Ask for confirmation, cancel the booking, then refresh the list."""
         reply = QMessageBox.question(
-            self,
-            "Xác nhận hủy vé",
-            "Bạn có chắc muốn hủy vé này? Hành động này không thể hoàn tác.",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No,
+            self, "Xác nhận hủy vé",
+            "Bạn có chắc muốn hủy đơn hàng này? Tất cả ghế trong đơn sẽ bị hủy.",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
         )
         if reply == QMessageBox.Yes:
-            ok = cancel_booking(booking_id)
-            if ok:
-                QMessageBox.information(self, "Thành công", "Đã hủy vé thành công.")
+            success = True
+            for bid in booking_ids:                     # <--- VÒNG LẶP HỦY TỪNG VÉ
+                if not cancel_booking(bid):
+                    success = False
+            
+            if success:
+                QMessageBox.information(self, "Thành công", "Đã hủy toàn bộ vé thành công.")
             else:
-                QMessageBox.warning(self, "Lỗi", "Không thể hủy vé. Vui lòng thử lại.")
+                QMessageBox.warning(self, "Lỗi", "Có lỗi xảy ra khi hủy một số vé.")
             self.refresh()
 
 
