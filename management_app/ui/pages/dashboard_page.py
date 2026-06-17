@@ -128,78 +128,59 @@ class StatCard(QWidget):
 # ─────────────────────────────────────────────────────────────────────────────
 # Revenue Chart (Đã chuyển thành Banner Hình Ảnh)
 # ─────────────────────────────────────────────────────────────────────────────
-class RevenueChart(QWidget):
+class BannerWidget(QWidget):
     def __init__(self):
         super().__init__()
         self.setStyleSheet(f"""
-            RevenueChart {{
+            BannerWidget {{
                 background: {WHITE};
                 border-radius: 16px;
                 border: 1px solid {BORDER};
             }}
         """)
-
         self._layout = QVBoxLayout(self)
         self._layout.setContentsMargins(24, 20, 24, 18)
 
-        # Header giữ nguyên UI cũ
+        # Header giữ nguyên UI
         header = QHBoxLayout()
         title_col = QVBoxLayout()
         title_col.setSpacing(3)
-
         title = QLabel("Hình ảnh Hãng bay")
-        title.setStyleSheet(f"""
-            font-size: 18px;
-            font-weight: 800;
-            color: {TEXT_DARK};
-        """)
-
+        title.setStyleSheet(f"font-size: 18px; font-weight: 800; color: {TEXT_DARK};")
         subtitle = QLabel("JETJET AIR PROMOTION")
-        subtitle.setStyleSheet(f"""
-            font-size: 9px;
-            color: {GRAY_TEXT};
-            letter-spacing: 2px;
-            font-weight: 600;
-        """)
-
+        subtitle.setStyleSheet(f"font-size: 9px; color: {GRAY_TEXT}; letter-spacing: 2px; font-weight: 600;")
         title_col.addWidget(title)
         title_col.addWidget(subtitle)
-
-        fy_label = QLabel("📅  NĂM TÀI CHÍNH 2026")
-        fy_label.setStyleSheet(f"""
-            font-size: 12px;
-            color: {GRAY_TEXT};
-            font-weight: 600;
-        """)
-
+        fy_label = QLabel("📅 NĂM TÀI CHÍNH 2026")
+        fy_label.setStyleSheet(f"font-size: 12px; color: {GRAY_TEXT}; font-weight: 600;")
+        
         header.addLayout(title_col)
         header.addStretch()
         header.addWidget(fy_label)
         self._layout.addLayout(header)
 
-        # Vùng chứa ảnh
-        self.banner_img = QLabel()
-        self.banner_img.setAlignment(Qt.AlignCenter)
-        self.banner_img.setStyleSheet("background: transparent;")
-        self._layout.addWidget(self.banner_img, 1) # Choán hết không gian còn lại
+        # Image Label có khả năng bắt sự kiện resize
+        self.img_label = QLabel()
+        self.img_label.setAlignment(Qt.AlignCenter)
+        self.img_label.setStyleSheet("background: transparent;")
+        self.pixmap_src = QPixmap("assets/banner.png")
         
-        self._load_image()
+        if self.pixmap_src.isNull():
+            self.img_label.setText("✈ HÌNH ẢNH HÃNG BAY ✈\\n(Vui lòng lưu ảnh vào assets/banner.png)")
+            self.img_label.setStyleSheet(f"color: {GRAY_TEXT}; font-size: 16px;")
+            
+        self._layout.addWidget(self.img_label, 1)
+
+    def resizeEvent(self, event):
+        """Hàm này giúp ảnh LUÔN co giãn theo khung chứa, không tạo ra scroll"""
+        if not self.pixmap_src.isNull():
+            # Scale ảnh theo kích thước hiện tại của Label
+            scaled_pix = self.pixmap_src.scaled(self.img_label.size(), Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation)
+            self.img_label.setPixmap(scaled_pix)
+        super().resizeEvent(event)
 
     def update_chart(self, month: int):
-        # Hàm này giữ lại tên để các sự kiện click combobox cũ không bị lỗi crash
-        pass
-
-    def _load_image(self):
-        """Tải ảnh banner vào QLabel"""
-        from PySide6.QtGui import QPixmap
-        pixmap = QPixmap("assets/banner.png")
-        if not pixmap.isNull():
-            # Tự động co giãn ảnh cho vừa khung
-            self.banner_img.setPixmap(pixmap.scaled(900, 350, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation))
-        else:
-            self.banner_img.setText("✈ HÌNH ẢNH HÃNG BAY ✈\\n(Hãy lưu ảnh vào assets/banner.png)")
-            self.banner_img.setStyleSheet(f"color: {GRAY_TEXT}; font-size: 16px;")
-
+        pass 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Route Item
@@ -484,7 +465,7 @@ class DashboardPage(QWidget):
         time_bar.addStretch()
         chart_col.addLayout(time_bar)
 
-        self._revenue_chart = RevenueChart()
+        self._revenue_chart = BannerWidget()
         self._time_combo.currentIndexChanged.connect(self._revenue_chart.update_chart)
         chart_col.addWidget(self._revenue_chart)
 
@@ -502,12 +483,12 @@ class DashboardPage(QWidget):
             total_pax = len(MOCK_VIP_PASSENGERS)
             total_revenue = sum(getattr(p, 'total_spending', 0) for p in MOCK_VIP_PASSENGERS)
             total_flights = len(MOCK_FLIGHTS)
-            # Giả sử số vé đã bán = Tổng ghế - Ghế trống
-            active_bookings = sum((getattr(f, 'total_seats', 180) - getattr(f, 'available_seats', 150)) for f in MOCK_FLIGHTS)
+            
+            # Đếm số yêu cầu đặt chỗ dựa trên số tickets của từng VIP Passenger
+            active_bookings = sum(getattr(p, 'tickets', 1) for p in MOCK_VIP_PASSENGERS)
             
             return total_flights, total_pax, active_bookings, total_revenue
         except Exception as e:
-            print("Lỗi tính toán Dashboard:", e)
             return 0, 0, 0, 0
 
     # ── Public API ─────────────────────────────────────────────

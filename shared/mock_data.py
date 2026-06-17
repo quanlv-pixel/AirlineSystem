@@ -115,45 +115,31 @@ SEED_ACCOUNTS: list = [
     ("dieulinh99",   "dieulinh.phan@gmail.com",  "Phan Thi Dieu Linh",  "jetjet123", 0),
 ]
 
-
+# =============================================================================
 # =============================================================================
 # 5. MOCK VIP PASSENGERS
-#    SimpleNamespace objects consumed by the Passengers page analytics card.
-#    Fields:
-#      full_name       - display name
-#      email           - unique key used to deduplicate against DB passengers
-#      passport_number - unique document number
-#      nationality     - country string
-#      total_spending  - lifetime spend in USD (determines tier badge)
-#      is_activated    - 1 = activated account, 0 = not activated
-#      month           - registration month (1-12), used by the month filter
-#    Used by: management_app/ui/pages/passengers_page.py
 # =============================================================================
 MOCK_VIP_PASSENGERS: list = [
-    SimpleNamespace(full_name="Pham Minh Duc",    email="duc.pm@elite.vn",     passport_number="B1234567", nationality="Vietnam", total_spending=3800.0, is_activated=1, month=1),
-    SimpleNamespace(full_name="Nguyen Lan Anh",   email="lananh@platinum.vn",  passport_number="C2345678", nationality="Vietnam", total_spending=5200.0, is_activated=1, month=1),
-    SimpleNamespace(full_name="Tran Viet Hung",   email="hung.tv@goldvip.vn",  passport_number="D3456789", nationality="Vietnam", total_spending=1750.0, is_activated=1, month=2),
-    SimpleNamespace(full_name="Le Thi Bich Van",  email="van.ltb@silver.vn",   passport_number="E4567890", nationality="Vietnam", total_spending=780.0,  is_activated=1, month=2),
-    SimpleNamespace(full_name="Vu Quang Khai",    email="khai.vq@member.vn",   passport_number="F5678901", nationality="Vietnam", total_spending=320.0,  is_activated=1, month=3),
-    SimpleNamespace(full_name="Do Thi Huong",     email="huong.dt@gold.vn",    passport_number="G6789012", nationality="Vietnam", total_spending=1620.0, is_activated=1, month=3),
-    SimpleNamespace(full_name="Hoang Anh Tuan",   email="tuan.ha@platinum.vn", passport_number="H7890123", nationality="Vietnam", total_spending=4900.0, is_activated=1, month=4),
-    SimpleNamespace(full_name="Bui Thi Ngoc",     email="ngoc.bt@silver.vn",   passport_number="I8901234", nationality="Vietnam", total_spending=860.0,  is_activated=1, month=4),
-    SimpleNamespace(full_name="Dinh Van Phuc",    email="phuc.dv@member.vn",   passport_number="J9012345", nationality="Vietnam", total_spending=410.0,  is_activated=1, month=5),
-    SimpleNamespace(full_name="Pham Thi Thu",     email="thu.pt@gold.vn",      passport_number="K0123456", nationality="Vietnam", total_spending=1900.0, is_activated=1, month=5),
-    SimpleNamespace(full_name="Cao Van Lam",      email="lam.cv@platinum.vn",  passport_number="L1234568", nationality="Vietnam", total_spending=6100.0, is_activated=1, month=6),
-    SimpleNamespace(full_name="Trinh Thi Mai",    email="mai.tt@silver.vn",    passport_number="M2345679", nationality="Vietnam", total_spending=950.0,  is_activated=1, month=6),
-    SimpleNamespace(full_name="Ngo Xuan Hai",     email="hai.nx@gold.vn",      passport_number="N3456780", nationality="Vietnam", total_spending=2100.0, is_activated=1, month=7),
-    SimpleNamespace(full_name="Ly Thi Cam",       email="cam.lt@member.vn",    passport_number="O4567891", nationality="Vietnam", total_spending=270.0,  is_activated=1, month=7),
-    SimpleNamespace(full_name="Phan Van Dat",     email="dat.pv@platinum.vn",  passport_number="P5678902", nationality="Vietnam", total_spending=5500.0, is_activated=1, month=8),
-    SimpleNamespace(full_name="Duong Thi Ha",     email="ha.dt@silver.vn",     passport_number="Q6789013", nationality="Vietnam", total_spending=700.0,  is_activated=1, month=8),
-    SimpleNamespace(full_name="Tran Quoc Toan",   email="toan.tq@gold.vn",     passport_number="R7890124", nationality="Vietnam", total_spending=1450.0, is_activated=1, month=9),
-    SimpleNamespace(full_name="Ha Thi Loan",      email="loan.ht@member.vn",   passport_number="S8901235", nationality="Vietnam", total_spending=190.0,  is_activated=1, month=9),
-    SimpleNamespace(full_name="Vuong Minh Tam",   email="tam.vm@platinum.vn",  passport_number="T9012346", nationality="Vietnam", total_spending=7200.0, is_activated=1, month=10),
-    SimpleNamespace(full_name="Nong Thi Bao",     email="bao.nt@silver.vn",    passport_number="U0123457", nationality="Vietnam", total_spending=830.0,  is_activated=1, month=10),
-    SimpleNamespace(full_name="Kieu Van Nam",     email="nam.kv@gold.vn",      passport_number="V1234569", nationality="Vietnam", total_spending=2400.0, is_activated=1, month=11),
-    SimpleNamespace(full_name="Truong Thi Yen",   email="yen.tt@member.vn",    passport_number="W2345670", nationality="Vietnam", total_spending=460.0,  is_activated=1, month=11),
-    SimpleNamespace(full_name="Mac Van Toan",     email="toan.mv@platinum.vn", passport_number="X3456781", nationality="Vietnam", total_spending=8900.0, is_activated=1, month=12),
-    SimpleNamespace(full_name="Banh Thi Kim",     email="kim.bt@gold.vn",      passport_number="Y4567892", nationality="Vietnam", total_spending=1800.0, is_activated=1, month=12),
+    SimpleNamespace(full_name="Pham Minh Duc",    email="duc.pm@elite.vn",     passport_number="B1234567", nationality="Vietnam", total_spending=3800.0, is_activated=1, month=1, tickets=2),
+    SimpleNamespace(full_name="Nguyen Lan Anh",   email="lananh@platinum.vn",  passport_number="C2345678", nationality="Vietnam", total_spending=5200.0, is_activated=1, month=1, tickets=4),
+    SimpleNamespace(full_name="Tran Viet Hung",   email="hung.tv@goldvip.vn",  passport_number="D3456789", nationality="Vietnam", total_spending=1750.0, is_activated=1, month=1, tickets=1),
+    SimpleNamespace(full_name="Le Thi Bich Van",  email="van.ltb@silver.vn",   passport_number="E4567890", nationality="Vietnam", total_spending=780.0,  is_activated=1, month=2, tickets=2),
+    SimpleNamespace(full_name="Vu Quang Khai",    email="khai.vq@member.vn",   passport_number="F5678901", nationality="Vietnam", total_spending=320.0,  is_activated=1, month=2, tickets=1),
+    SimpleNamespace(full_name="Do Thi Huong",     email="huong.dt@gold.vn",    passport_number="G6789012", nationality="Vietnam", total_spending=1620.0, is_activated=1, month=2, tickets=3),
+    SimpleNamespace(full_name="Hoang Anh Tuan",   email="tuan.ha@platinum.vn", passport_number="H7890123", nationality="Vietnam", total_spending=4900.0, is_activated=1, month=3, tickets=2),
+    SimpleNamespace(full_name="Bui Thi Ngoc",     email="ngoc.bt@silver.vn",   passport_number="I8901234", nationality="Vietnam", total_spending=860.0,  is_activated=1, month=3, tickets=1),
+    SimpleNamespace(full_name="Dinh Van Phuc",    email="phuc.dv@member.vn",   passport_number="J9012345", nationality="Vietnam", total_spending=410.0,  is_activated=1, month=3, tickets=1),
+    SimpleNamespace(full_name="Pham Thi Thu",     email="thu.pt@gold.vn",      passport_number="K0123456", nationality="Vietnam", total_spending=1900.0, is_activated=1, month=4, tickets=4),
+    SimpleNamespace(full_name="Cao Van Lam",      email="lam.cv@platinum.vn",  passport_number="L1234568", nationality="Vietnam", total_spending=6100.0, is_activated=1, month=4, tickets=2),
+    SimpleNamespace(full_name="Trinh Thi Mai",    email="mai.tt@silver.vn",    passport_number="M2345679", nationality="Vietnam", total_spending=950.0,  is_activated=1, month=4, tickets=2),
+    SimpleNamespace(full_name="Ngo Xuan Hai",     email="hai.nx@gold.vn",      passport_number="N3456780", nationality="Vietnam", total_spending=2100.0, is_activated=1, month=5, tickets=3),
+    SimpleNamespace(full_name="Ly Thi Cam",       email="cam.lt@member.vn",    passport_number="O4567891", nationality="Vietnam", total_spending=270.0,  is_activated=1, month=5, tickets=1),
+    SimpleNamespace(full_name="Phan Van Dat",     email="dat.pv@platinum.vn",  passport_number="P5678902", nationality="Vietnam", total_spending=5500.0, is_activated=1, month=5, tickets=2),
+    SimpleNamespace(full_name="Duong Thi Ha",     email="ha.dt@silver.vn",     passport_number="Q6789013", nationality="Vietnam", total_spending=700.0,  is_activated=1, month=6, tickets=1),
+    SimpleNamespace(full_name="Tran Quoc Toan",   email="toan.tq@gold.vn",     passport_number="R7890124", nationality="Vietnam", total_spending=1450.0, is_activated=1, month=6, tickets=4),
+    SimpleNamespace(full_name="Ha Thi Loan",      email="loan.ht@member.vn",   passport_number="S8901235", nationality="Vietnam", total_spending=190.0,  is_activated=1, month=6, tickets=2),
+    SimpleNamespace(full_name="Vuong Minh Tam",   email="tam.vm@platinum.vn",  passport_number="T9012346", nationality="Vietnam", total_spending=7200.0, is_activated=1, month=6, tickets=1),
+    SimpleNamespace(full_name="Nong Thi Bao",     email="bao.nt@silver.vn",    passport_number="U0123457", nationality="Vietnam", total_spending=830.0,  is_activated=1, month=6, tickets=3),
 ]
 
 # =============================================================================
