@@ -7,9 +7,12 @@ Updated: Promo code input in OrderSummary, dynamic total recalculation,
 """
 from __future__ import annotations
 import hashlib, random, string, sys
+import requests
+import qrcode
+import socket
 from PySide6.QtCore import Qt, Signal, QTimer, QPoint
 from PySide6.QtGui import (QColor, QPainter, QBrush, QPen, QPainterPath,
-                            QLinearGradient, QFont)
+                            QLinearGradient, QFont, QImage, QPixmap)
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QPushButton, QFrame, QScrollArea, QLineEdit,
@@ -46,17 +49,28 @@ class CreditCardPreview(QWidget):
         f.setPointSize(14); p.setFont(f); p.drawText(20, h-40, " ".join([self._number[i:i+4] for i in range(0,16,4)]).ljust(19, "*"))
         f.setPointSize(9); p.setFont(f); p.drawText(20, h-15, self._name or "FULL NAME"); p.drawText(w-70, h-15, self._expiry or "MM/YY")
 
-class QRCodeWidget(QWidget):
-    def __init__(self, data: str, size: int = 200, parent=None):
-        super().__init__(parent); self.setFixedSize(size, size); self.data = data or "JETJET-PAY"
-    def paintEvent(self, _):
-        p = QPainter(self); w = self.width(); res = 15; unit = w / res
-        hash_val = int(hashlib.md5(self.data.encode()).hexdigest(), 16)
-        p.fillRect(0, 0, w, w, Qt.white); p.setPen(Qt.NoPen); p.setBrush(Qt.black)
-        for i in range(res):
-            for j in range(res):
-                if (i < 3 and j < 3) or (i > res-4 and j < 3) or (i < 3 and j > res-4): p.drawRect(i*unit, j*unit, unit, unit)
-                elif (hash_val >> (i*res + j)) & 1: p.drawRect(i*unit, j*unit, unit, unit)
+class QRCodeWidget(QLabel):
+    def __init__(self, url_data: str = "WAITING", size: int = 200, parent=None):
+        super().__init__(parent)
+        self.setFixedSize(size, size)
+        self.setStyleSheet("background: white; border-radius: 12px; border: 1px solid #E4E6F0;")
+        self.setAlignment(Qt.AlignCenter)
+        self.update_qr(url_data)
+
+    def update_qr(self, url_data: str):
+        # Tạo mã QR thật
+        qr = qrcode.QRCode(version=1, box_size=10, border=1)
+        qr.add_data(url_data)
+        qr.make(fit=True)
+        img = qr.make_image(fill_color="black", back_color="white")
+        
+        # Chuyển ảnh QR sang PySide6
+        img = img.convert("RGBA")
+        data = img.tobytes("raw", "RGBA")
+        qimg = QImage(data, img.size[0], img.size[1], QImage.Format_RGBA8888)
+        pixmap = QPixmap.fromImage(qimg)
+        
+        self.setPixmap(pixmap.scaled(self.width() - 20, self.height() - 20, Qt.KeepAspectRatio, Qt.SmoothTransformation))
 
 class SSLDialog(QDialog):
     payment_complete = Signal()
@@ -306,14 +320,61 @@ class PaymentPage(QWidget):
 
         self.btn_card.clicked.connect(lambda: self._switch_method(0))
         self.btn_qr.clicked.connect(lambda: self._switch_method(1))
+
+        # Thêm Radar quét trạng thái QR
+        self.check_timer = QTimer(self)
+        self.check_timer.timeout.connect(self._check_payment_status)
         self._switch_method(0)
+
 
     def _switch_method(self, idx):
         self.method_stack.setCurrentIndex(idx)
-        self.btn_card.setChecked(idx == 0); self.btn_qr.setChecked(idx == 1)
         st = "background:{}; color:{}; border:none; border-radius:8px; font-weight:700;"
         self.btn_card.setStyleSheet(st.format(C_RED if idx==0 else C_WHITE, C_WHITE if idx==0 else C_MID))
         self.btn_qr.setStyleSheet(st.format(C_RED if idx==1 else C_WHITE, C_WHITE if idx==1 else C_MID))
+        
+        # BẬT/TẮT RADAR QUÉT QR
+        if idx == 1:
+            pnr = self.ctx.get('pnr', 'TEST')
+            amount = self.ctx.get('total', 0)
+            
+            # Tự động lấy IP máy tính
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            try:
+                s.connect(("8.8.8.8", 80))
+                ip = s.getsockname()[0]
+            except:
+                ip = "127.0.0.1"
+            finally:
+                s.close()
+                
+            # Tạo Link thật cho điện thoại quét
+            payment_url = f"http://{ip}:5000/pay/{pnr}/{amount}"
+            self.qr_widget.update_qr(payment_url)
+            
+            # Bật Radar, quét 2 giây 1 lần
+            self.check_timer.start(2000)
+        else:
+            self.check_timer.stop()
+
+    def _check_payment_status(self):
+        pnr = self.ctx.get('pnr', 'TEST')
+        try:
+            # Máy tính hỏi Server xem điện thoại đã bấm nút chưa
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.connect(("8.8.8.8", 80))
+            ip = s.getsockname()[0]
+            s.close()
+            
+            res = requests.get(f"http://{ip}:5000/api/status/{pnr}", timeout=1)
+            data = res.json()
+            
+            if data.get("status") == "PAID":
+                self.check_timer.stop()
+                # Tự động phát tín hiệu hoàn thành y hệt như lúc điền thẻ tín dụng!
+                self.payment_complete.emit(self.ctx)
+        except Exception as e:
+            pass # Bỏ qua nếu mất mạng hoặc server chưa bật
 
     def update_page(self, ctx: dict | None = None):
         if ctx: self.ctx = ctx
