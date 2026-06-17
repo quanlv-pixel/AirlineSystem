@@ -3,6 +3,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QFrame, QPushButton, QScrollArea, QComboBox,
 )
+from PySide6.QtGui import QPixmap
 
 try:
     from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
@@ -18,6 +19,7 @@ try:
 except Exception:
     HAS_SCIPY = False
 
+from shared.mock_data import MOCK_VIP_PASSENGERS, MOCK_FLIGHTS
 from shared.services.flight_service import get_total_flights
 from shared.services.passenger_service import get_total_passengers
 from shared.services.booking_service import (
@@ -123,26 +125,10 @@ class StatCard(QWidget):
 # ─────────────────────────────────────────────────────────────────────────────
 # Revenue Chart
 # ─────────────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
+# Revenue Chart (Đã chuyển thành Banner Hình Ảnh)
+# ─────────────────────────────────────────────────────────────────────────────
 class RevenueChart(QWidget):
-    # 12 months of synthetic weekly-average data (index 0 = all year)
-    _MONTH_DATA = [
-        # All year (avg weekly)
-        [4000, 3000, 2000, 2800, 1900, 2400, 3500],
-        # Jan-Dec monthly snapshots
-        [1200, 1100, 1300, 1000, 950,  1050, 1400],  # T1
-        [1400, 1250, 1300, 1450, 1200, 1350, 1500],  # T2
-        [2200, 2100, 2000, 2300, 2150, 2250, 2400],  # T3
-        [2800, 2600, 2700, 2900, 2750, 2850, 3000],  # T4
-        [3200, 3100, 3000, 3300, 3150, 3250, 3400],  # T5
-        [3800, 3600, 3700, 3900, 3750, 3850, 4000],  # T6
-        [4200, 4000, 4100, 4300, 4150, 4250, 4400],  # T7
-        [3900, 3700, 3800, 4000, 3850, 3950, 4100],  # T8
-        [3400, 3200, 3300, 3500, 3350, 3450, 3600],  # T9
-        [2900, 2700, 2800, 3000, 2850, 2950, 3100],  # T10
-        [3500, 3300, 3400, 3600, 3450, 3550, 3700],  # T11
-        [4500, 4300, 4400, 4600, 4450, 4550, 4700],  # T12
-    ]
-
     def __init__(self):
         super().__init__()
         self.setStyleSheet(f"""
@@ -156,19 +142,19 @@ class RevenueChart(QWidget):
         self._layout = QVBoxLayout(self)
         self._layout.setContentsMargins(24, 20, 24, 18)
 
-        # Header
+        # Header giữ nguyên UI cũ
         header = QHBoxLayout()
         title_col = QVBoxLayout()
         title_col.setSpacing(3)
 
-        title = QLabel("Hiệu suất Doanh thu")
+        title = QLabel("Hình ảnh Hãng bay")
         title.setStyleSheet(f"""
             font-size: 18px;
             font-weight: 800;
             color: {TEXT_DARK};
         """)
 
-        subtitle = QLabel("TỔNG HỢP THU NHẬP TOÀN CẦU")
+        subtitle = QLabel("JETJET AIR PROMOTION")
         subtitle.setStyleSheet(f"""
             font-size: 9px;
             color: {GRAY_TEXT};
@@ -191,72 +177,28 @@ class RevenueChart(QWidget):
         header.addWidget(fy_label)
         self._layout.addLayout(header)
 
-        # Canvas placeholder — filled by update_chart()
-        self._canvas_widget = None
-        self._update_chart_data(0)  # 0 = cả năm
+        # Vùng chứa ảnh
+        self.banner_img = QLabel()
+        self.banner_img.setAlignment(Qt.AlignCenter)
+        self.banner_img.setStyleSheet("background: transparent;")
+        self._layout.addWidget(self.banner_img, 1) # Choán hết không gian còn lại
+        
+        self._load_image()
 
     def update_chart(self, month: int):
-        """
-        Refresh chart for the given month index.
-        month=0 means 'cả năm' (all year).
-        """
-        self._update_chart_data(month)
+        # Hàm này giữ lại tên để các sự kiện click combobox cũ không bị lỗi crash
+        pass
 
-    def _update_chart_data(self, month: int):
-        """Internal: remove old canvas and redraw with new data."""
-        if self._canvas_widget is not None:
-            self._layout.removeWidget(self._canvas_widget)
-            self._canvas_widget.deleteLater()
-            self._canvas_widget = None
-
-        raw_y = self._MONTH_DATA[month] if 0 <= month < len(self._MONTH_DATA) \
-            else self._MONTH_DATA[0]
-
-        if HAS_MPL:
-            fig = Figure(figsize=(5, 2.8), facecolor="white")
-            canvas = FigureCanvas(fig)
-            ax = fig.add_subplot(111)
-
-            days_x = np.array([0, 1, 2, 3, 4, 5, 6], dtype=float)
-            y_arr  = np.array(raw_y, dtype=float)
-
-            if HAS_SCIPY:
-                x_new = np.linspace(0, 6, 400)
-                spl   = make_interp_spline(days_x, y_arr, k=3)
-                y_new = spl(x_new)
-                ax.plot(x_new, y_new, color=RED, linewidth=2.8,
-                        solid_capstyle="round")
-                ax.fill_between(x_new, y_new, alpha=0.07, color=RED)
-            else:
-                days_lbl = ["T2","T3","T4","T5","T6","T7","CN"]
-                ax.plot(days_lbl, y_arr, color=RED, linewidth=2.8)
-                ax.fill_between(days_lbl, y_arr, alpha=0.07, color=RED)
-                days_x = np.arange(7)
-
-            ax.set_xticks(np.arange(7))
-            ax.set_xticklabels(["T2","T3","T4","T5","T6","T7","CN"])
-            ax.set_xlim(-0.1, 6.1)
-            y_max = max(raw_y) * 1.2 or 4500
-            ax.set_ylim(0, y_max)
-
-            ax.yaxis.grid(True, color="#F0F0F0", linewidth=1)
-            ax.set_axisbelow(True)
-            ax.xaxis.grid(False)
-            ax.set_facecolor("white")
-
-            for spine in ax.spines.values():
-                spine.set_visible(False)
-
-            ax.tick_params(colors="#9E9E9E", labelsize=9)
-            fig.tight_layout(pad=0.6)
-            self._canvas_widget = canvas
+    def _load_image(self):
+        """Tải ảnh banner vào QLabel"""
+        from PySide6.QtGui import QPixmap
+        pixmap = QPixmap("assets/banner.png")
+        if not pixmap.isNull():
+            # Tự động co giãn ảnh cho vừa khung
+            self.banner_img.setPixmap(pixmap.scaled(900, 350, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation))
         else:
-            fallback = QLabel("Cài matplotlib để xem biểu đồ.")
-            fallback.setAlignment(Qt.AlignCenter)
-            fallback.setStyleSheet(f"color: {GRAY_TEXT}; padding: 40px;")
-            self._canvas_widget = fallback
-
-        self._layout.addWidget(self._canvas_widget)
+            self.banner_img.setText("✈ HÌNH ẢNH HÃNG BAY ✈\\n(Hãy lưu ảnh vào assets/banner.png)")
+            self.banner_img.setStyleSheet(f"color: {GRAY_TEXT}; font-size: 16px;")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -557,14 +499,16 @@ class DashboardPage(QWidget):
     @staticmethod
     def _fetch_stats():
         try:
-            return (
-                get_total_flights(),
-                get_total_passengers(),
-                get_active_bookings_count(),
-                get_total_revenue(),
-            )
-        except Exception:
-            return 42, 1280, 854, 124500
+            total_pax = len(MOCK_VIP_PASSENGERS)
+            total_revenue = sum(getattr(p, 'total_spending', 0) for p in MOCK_VIP_PASSENGERS)
+            total_flights = len(MOCK_FLIGHTS)
+            # Giả sử số vé đã bán = Tổng ghế - Ghế trống
+            active_bookings = sum((getattr(f, 'total_seats', 180) - getattr(f, 'available_seats', 150)) for f in MOCK_FLIGHTS)
+            
+            return total_flights, total_pax, active_bookings, total_revenue
+        except Exception as e:
+            print("Lỗi tính toán Dashboard:", e)
+            return 0, 0, 0, 0
 
     # ── Public API ─────────────────────────────────────────────
     def refresh(self):

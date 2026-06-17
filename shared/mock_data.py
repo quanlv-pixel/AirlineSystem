@@ -155,3 +155,24 @@ MOCK_VIP_PASSENGERS: list = [
     SimpleNamespace(full_name="Mac Van Toan",     email="toan.mv@platinum.vn", passport_number="X3456781", nationality="Vietnam", total_spending=8900.0, is_activated=1, month=12),
     SimpleNamespace(full_name="Banh Thi Kim",     email="kim.bt@gold.vn",      passport_number="Y4567892", nationality="Vietnam", total_spending=1800.0, is_activated=1, month=12),
 ]
+
+# =============================================================================
+# 6. MOCK FLIGHTS (BỔ SUNG)
+# =============================================================================
+import random
+from shared.models.flight import Flight
+
+MOCK_FLIGHTS: list = []
+for i in range(1, 61):
+    MOCK_FLIGHTS.append(Flight(
+        flight_id=i,
+        flight_number=f"JJ{100+i}",
+        airline_name="JetJet Air",
+        departure=random.choice(["SGN", "HAN", "DAD"]),
+        destination=random.choice(["PQC", "CXR", "SIN", "ICN", "NRT"]),
+        total_seats=180,
+        available_seats=random.randint(0, 150),
+        ticket_price=random.randint(50, 200),
+        status=random.choice(["Scheduled", "Completed", "Delayed", "In Air"]),
+        month=random.randint(1, 6) # Gán tháng 1-6 để vẽ biểu đồ
+    ))

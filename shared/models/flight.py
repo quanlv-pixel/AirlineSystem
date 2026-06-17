@@ -1,5 +1,4 @@
 class Flight:
-
     def __init__(
         self,
         flight_id: int = None,
@@ -17,6 +16,7 @@ class Flight:
         ticket_price: float = 0.0,
         status: str = "Scheduled",
         created_at: str = None,
+        month: int = None,  # <-- THÊM THUỘC TÍNH NÀY
     ):
         self.flight_id = flight_id
         self.flight_number = flight_number
@@ -41,6 +41,7 @@ class Flight:
         self.status = status
 
         self.created_at = created_at
+        self.month = month  # <-- GÁN GIÁ TRỊ NÀY
 
     @property
     def route(self) -> str:

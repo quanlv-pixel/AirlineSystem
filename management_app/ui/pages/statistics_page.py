@@ -43,7 +43,7 @@ from shared.services.booking_service import (
     get_total_bookings,
 )
 
-from shared.mock_data import MOCK_VIP_PASSENGERS
+from shared.mock_data import MOCK_VIP_PASSENGERS, MOCK_FLIGHTS
 
 
 # COLORS
@@ -481,7 +481,8 @@ class StatisticsPage(QWidget):
         top_hdr.addStretch()
 
         self._time_combo = QComboBox()
-        self._time_combo.addItems(["Năm nay", "Tháng này", "Tuần này"])
+        self._time_combo.clear() # Tên biến combo box của bạn có thể là time_combo hoặc filter_box
+        self._time_combo.addItems(["Cả năm", "Tháng 1", "Tháng 2", "Tháng 3", "Tháng 4", "Tháng 5", "Tháng 6"])
         self._time_combo.setFixedHeight(36)
         self._time_combo.setStyleSheet(f"""
             QComboBox {{
@@ -635,30 +636,40 @@ class StatisticsPage(QWidget):
 
         layout.addLayout(footer)
 
-    def load_statistics(self):
+    def load_statistics(self, index=0):
         try:
-            # 1. Đồng bộ tổng doanh thu từ chi tiêu của toàn bộ khách hàng (DB + Mock)
-            db_passengers = get_all_passengers_enriched()
-            db_emails = {getattr(p, 'email', '') for p in db_passengers}
-            extra_mock = [p for p in MOCK_VIP_PASSENGERS if getattr(p, 'email', '') not in db_emails]
-            all_passengers = list(db_passengers) + extra_mock
+            # Import Mock Data từ file cấu hình của bạn
+            from shared.mock_data import MOCK_VIP_PASSENGERS, MOCK_FLIGHTS
 
-            self.total_revenue = sum(getattr(p, "total_spending", 0) for p in all_passengers)
+            # 1. Lọc dữ liệu theo tháng (index = 0 là Cả năm, 1->6 là Tháng 1->6)
+            if index == 0:   
+                filtered_pax = MOCK_VIP_PASSENGERS
+                filtered_flights = MOCK_FLIGHTS
+            else:            
+                filtered_pax = [p for p in MOCK_VIP_PASSENGERS if getattr(p, 'month', 0) == index]
+                filtered_flights = [f for f in MOCK_FLIGHTS if getattr(f, 'month', 0) == index]
 
-            # 2. Lấy các thông số còn lại
-            self.total_flights = get_total_flights()
-            self.total_passengers = get_total_passengers()
-            self.total_bookings = get_total_bookings()
-            self.load_factor = get_average_load_factor()
+            # 2. Tính toán các thông số từ dữ liệu Hard-core đã lọc
+            self.total_revenue = sum(getattr(p, "total_spending", 0) for p in filtered_pax)
+            self.total_passengers = len(filtered_pax)
+            self.total_flights = len(filtered_flights)
+            
+            # Tính số vé đã đặt (bookings) dựa trên số ghế đã bán trong chuyến bay
+            self.total_bookings = sum((getattr(f, 'total_seats', 180) - getattr(f, 'available_seats', 150)) for f in filtered_flights)
+            
+            # Tính tỷ lệ lấp đầy trung bình
+            if self.total_flights > 0:
+                self.load_factor = sum(((getattr(f, 'total_seats', 180) - getattr(f, 'available_seats', 150)) / getattr(f, 'total_seats', 180)) * 100 for f in filtered_flights) / self.total_flights
+            else:
+                self.load_factor = 0
 
         except Exception as e:
             print(f"Lỗi load_statistics: {e}")
-            self.total_revenue = 4800000
-            self.total_flights = 12842
-            self.total_bookings = 9500
-            self.total_passengers = 324000
-            self.total_bookings = 9500
-            self.load_factor = 82
+            self.total_revenue = 0
+            self.total_flights = 0
+            self.total_passengers = 0
+            self.total_bookings = 0
+            self.load_factor = 0
 
     def _on_time_filter(self, index: int) -> None:
         """

@@ -1,5 +1,4 @@
 class Passenger:
-
     def __init__(
         self,
         passenger_id: int = None,
@@ -10,13 +9,13 @@ class Passenger:
         phone: str = None,
         email: str = None,
 
-        # thêm
         member_rank: str = "member",
         total_spending: float = 0,
 
         passport_number: str = None,
         emergency_contact: str = None,
         created_at: str = None,
+        month: int = None,  # <-- THÊM THUỘC TÍNH NÀY
     ):
         self.passenger_id = passenger_id
         self.full_name = full_name
@@ -26,13 +25,13 @@ class Passenger:
         self.phone = phone
         self.email = email
 
-        # thêm
         self.member_rank = member_rank
         self.total_spending = total_spending
 
         self.passport_number = passport_number
         self.emergency_contact = emergency_contact
         self.created_at = created_at
+        self.month = month  # <-- GÁN GIÁ TRỊ NÀY
 
     def __repr__(self):
         return (
