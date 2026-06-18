@@ -29,11 +29,10 @@ def get_all_flights() -> list[Flight]:
     cursor.execute("""
         SELECT *
         FROM flights
-        ORDER BY departure_time
+        ORDER BY flight_id DESC
     """)
 
     rows = cursor.fetchall()
-
     conn.close()
 
     return [_row_to_flight(row) for row in rows]
@@ -285,38 +284,24 @@ def sync_mock_flight_to_db(flight_id: int) -> bool:
         conn.close()
 
 def search_flights(keyword):
-
-    conn=connect_db()
-
-    cursor=conn.cursor()
-
+    conn = connect_db()
+    cursor = conn.cursor()
     cursor.execute("""
-
-    SELECT *
-
-    FROM flights
-
-    WHERE
-
-    flight_number LIKE ?
-    OR departure LIKE ?
-    OR destination LIKE ?
-    OR airline_name LIKE ?
-
-    """,(
-
-    f"%{keyword}%",
-
-    f"%{keyword}%",
-
-    f"%{keyword}%",
-
-    f"%{keyword}%"
-
+        SELECT *
+        FROM flights
+        WHERE
+        flight_number LIKE ?
+        OR departure LIKE ?
+        OR destination LIKE ?
+        OR airline_name LIKE ?
+    """, (
+        f"%{keyword}%",
+        f"%{keyword}%",
+        f"%{keyword}%",
+        f"%{keyword}%"
     ))
-
-    rows=cursor.fetchall()
-
+    rows = cursor.fetchall()
     conn.close()
-
-    return rows
+    
+    # SỬA LỖI Ở ĐÂY: Chuyển dữ liệu thô thành Object Flight
+    return [_row_to_flight(row) for row in rows]

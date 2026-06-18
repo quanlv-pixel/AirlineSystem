@@ -17,7 +17,7 @@ from PySide6.QtGui import (
 from PySide6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QFrame, QScrollArea, QSizePolicy, QLabel,
-    QMessageBox
+    QMessageBox, QDialog, QFormLayout, QLineEdit
 )
 
 from booking_app.ui.pages.booking_shared import (
@@ -28,7 +28,7 @@ from booking_app.ui.pages.booking_shared import (
 )
 
 from shared.services.booking_service import get_booking_history_by_user
-from shared.services.account_service import get_is_activated
+from shared.services.account_service import get_is_activated, update_account
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -215,6 +215,43 @@ class AccountInfoCard(QWidget):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# DIALOG CHỈNH SỬA THÔNG TIN
+# ─────────────────────────────────────────────────────────────────────────────
+class EditProfileDialog(QDialog):
+    def __init__(self, account, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Chỉnh sửa thông tin")
+        self.setFixedSize(350, 200)
+        self.setStyleSheet(f"background: {C_WHITE}; color: {C_TEXT};")
+        
+        layout = QFormLayout(self)
+        layout.setContentsMargins(20, 20, 20, 20)
+        input_style = f"border: 1px solid {C_BORDER}; border-radius: 6px; padding: 8px; font-size: 13px;"
+        
+        # Lấy dữ liệu cũ (Xử lý cả 2 trường hợp biến là Dictionary hoặc Object)
+        if isinstance(account, dict):
+            old_name = account.get("full_name", "")
+            old_phone = account.get("phone", "")
+        else:
+            old_name = getattr(account, "full_name", "")
+            old_phone = getattr(account, "phone", "")
+
+        self.name_input = QLineEdit(old_name)
+        self.name_input.setStyleSheet(input_style)
+        self.phone_input = QLineEdit(old_phone)
+        self.phone_input.setStyleSheet(input_style)
+        
+        layout.addRow(lbl("Họ và tên:", 13, 600), self.name_input)
+        layout.addRow(lbl("Số điện thoại:", 13, 600), self.phone_input)
+        
+        save_btn = QPushButton("Lưu thay đổi")
+        save_btn.setCursor(Qt.PointingHandCursor)
+        save_btn.setStyleSheet(f"background: {C_RED}; color: {C_WHITE}; border: none; border-radius: 8px; padding: 10px; font-weight: bold; margin-top: 10px;")
+        save_btn.clicked.connect(self.accept)
+        layout.addRow(save_btn)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # 5. INFORMATION PAGE (Main)
 # ─────────────────────────────────────────────────────────────────────────────
 class InformationPage(QWidget):
@@ -381,14 +418,33 @@ class InformationPage(QWidget):
         lay.addLayout(body)
         lay.addStretch()
 
-    # ── Slot: Edit button placeholder ────────────────────────────────────
+    # ── Slot: Mở Form Edit ───────────────────────────────────────────────────
     def _on_edit_clicked(self):
-        msg = QMessageBox(self)
-        msg.setWindowTitle("Chỉnh sửa thông tin")
-        msg.setText("Tính năng chỉnh sửa thông tin đang được phát triển.\nVui lòng quay lại sau!")
-        msg.setIcon(QMessageBox.Information)
-        msg.exec()
+        dialog = EditProfileDialog(self.account, self)
+        if dialog.exec() == QDialog.Accepted:
+            new_name = dialog.name_input.text()
+            new_phone = dialog.phone_input.text()
+            
+            # 1. Tìm account_id và Cập nhật biến bộ nhớ local
+            if isinstance(self.account, dict):
+                acc_id = self.account.get("account_id") or self.account.get("user_id")
+                self.account["full_name"] = new_name
+                self.account["phone"] = new_phone
+            else:
+                acc_id = getattr(self.account, "account_id", None) or getattr(self.account, "user_id", None)
+                self.account.full_name = new_name
+                self.account.phone = new_phone
+                
+            # 2. Cập nhật xuống Database thông qua account_service
+            if acc_id:
+                try:
+                    update_account(account_id=acc_id, full_name=new_name, phone=new_phone)
+                except Exception as e:
+                    print(f"Lỗi cập nhật DB: {e}")
 
+            # 3. Vẽ lại giao diện Card
+            self.update_account(self.account)
+            QMessageBox.information(self, "Thành công", "Cập nhật thông tin thành công!")
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Standalone test
