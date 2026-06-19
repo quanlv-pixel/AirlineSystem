@@ -249,6 +249,7 @@ class BookingWindow(QMainWindow):
             "total":        0,
             "is_activated": is_activated,
             "promo_used":   None,
+            "pnr":          "JJ" + "".join(random.choices(string.ascii_uppercase + string.digits, k=4)),
         }
         # Guard: prevents duplicate DB writes if payment_complete fires twice
         self._booking_saved: bool = False
@@ -360,7 +361,9 @@ class BookingWindow(QMainWindow):
 
     def _handle_nav_tab(self, index: int):
         if 0 <= index <= 3:
-            if index == 1:
+            if index == 0:
+                self.step1_search.search_flights()
+            elif index == 1:
                 self.page_history.refresh(self.account)
             elif index == 2:
                 # Always check activation state from DB before showing promo tab
@@ -380,8 +383,10 @@ class BookingWindow(QMainWindow):
         self.ctx["flight"]     = flight_data
         self.ctx["base_price"] = flight_data.get("price", 0)
         self.ctx["total"]      = self.ctx["base_price"] + self.ctx["tax"] + self.ctx["fee"]
-        self.ctx["promo_used"] = None    # reset promo each new booking
-        self._booking_saved   = False    # reset guard for the new booking flow
+        self.ctx["promo_used"] = None    
+        self._booking_saved   = False  
+        self.ctx["seats"] = []
+        self.ctx["seat_labels"] = []  
         if hasattr(self.step2_detail, 'flight'): self.step2_detail.flight = flight_data
         self._call_update_and_switch(self.step2_detail, 4)
 
@@ -422,7 +427,10 @@ class BookingWindow(QMainWindow):
 
     def _reset_to_home(self):
         username = self.account.get("username", "")
-        self.ctx = {
+        
+        # SỬA LỖI DATA BỊ NỐI 5 VÉ Ở ĐÂY: Phải clear() thay vì gán bằng mới
+        self.ctx.clear()
+        self.ctx.update({
             "account":      self.account,
             "flight":       None,
             "passenger":    None,
@@ -435,7 +443,8 @@ class BookingWindow(QMainWindow):
             "total":        0,
             "is_activated": get_is_activated(username),
             "promo_used":   None,
-        }
+            "pnr":          "JJ" + "".join(random.choices(string.ascii_uppercase + string.digits, k=4))
+        })
         self._booking_saved = False  # reset for next booking session
 
         self.page_history.refresh(self.account)
