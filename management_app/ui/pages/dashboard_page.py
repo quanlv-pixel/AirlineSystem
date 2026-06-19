@@ -241,32 +241,27 @@ class RouteItem(QWidget):
 # ─────────────────────────────────────────────────────────────────────────────
 ROUTE_COLORS = [RED, "#1E88E5", "#8E24AA", "#5E35B1"]
 
-
-def _fetch_top_routes(limit: int = 4):
+def _fetch_route_stats():
     """
-    Query the DB for the most-booked departure → destination pairs.
-    Returns a list of dicts: {route, count}.
+    Lấy số lượng vé ĐÃ ĐẶT từ DB để cộng dồn vào phần trăm của Base Data
+    Trả về Dictionary: {(departure, destination): count}
     """
     try:
         conn = get_connection()
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT f.departure, f.destination, COUNT(b.booking_id) AS cnt
+            SELECT f.departure, f.destination, COUNT(b.booking_id) 
             FROM bookings b
             JOIN flights f ON b.flight_id = f.flight_id
             WHERE b.booking_status IN ('Confirmed', 'Paid')
             GROUP BY f.departure, f.destination
-            ORDER BY cnt DESC
-            LIMIT ?
-        """, (limit,))
+        """)
         rows = cursor.fetchall()
         conn.close()
-        return [{"route": f"{(r[0] or '')[:3].upper()} -> {(r[1] or '')[:3].upper()}",
-                 "count": r[2]} for r in rows]
+        return {(r[0], r[1]): r[2] for r in rows}
     except Exception as e:
         print(f"[RoutesPanel] DB error: {e}")
-        return []
-
+        return {}
 
 class RoutesPanel(QWidget):
     def __init__(self):
@@ -299,18 +294,21 @@ class RoutesPanel(QWidget):
         self._outer.addLayout(header)
         self._outer.addSpacing(14)
 
-        # Placeholder container for route items (rebuilt on refresh)
+        # Container chứa các tuyến bay
         self._routes_container = QWidget()
         self._routes_container.setStyleSheet("background:transparent;")
         self._routes_layout = QVBoxLayout(self._routes_container)
         self._routes_layout.setContentsMargins(0, 0, 0, 0)
-        self._routes_layout.setSpacing(10)
+        self._routes_layout.setSpacing(14)
         self._outer.addWidget(self._routes_container)
 
-        self._outer.addStretch()
+        # Tạo khoảng cách cố định để đẩy nút Báo cáo lên sát data (% data)
+        self._outer.addSpacing(20)
 
+        # Nút Báo cáo Tối ưu hóa (Được đưa lên trên Stretch)
         btn = QPushButton("BÁO CÁO TỐI ƯU HÓA")
         btn.setFixedHeight(40)
+        btn.setCursor(Qt.PointingHandCursor)
         btn.setStyleSheet(f"""
             QPushButton {{
                 background: {RED_LIGHT};
@@ -324,55 +322,58 @@ class RoutesPanel(QWidget):
             QPushButton:hover {{ background: #FFDADA; }}
         """)
         self._outer.addWidget(btn)
+        
+        # Lực đẩy (Stretch) cuối cùng để đẩy toàn bộ nội dung lên trên
+        self._outer.addStretch()
 
-        # Build routes on first load
+        # Build routes lần đầu
         self._build_routes()
 
     def _build_routes(self):
-        """Clear and re-render RouteItem widgets from DB data."""
-        # Remove all existing route items
+        """Lấy 4 tuyến bay cao nhất (Base data + Thực tế)"""
         while self._routes_layout.count():
             child = self._routes_layout.takeAt(0)
             if child.widget():
                 child.widget().deleteLater()
 
-        top_routes = _fetch_top_routes(4)
+        # Dữ liệu gốc cố định
+        base_data = {
+            ("SGN", "HAN"): {"label": "Lưu lượng cao", "score": 85, "color": RED},
+            ("SGN", "DAD"): {"label": "Cao điểm mùa vụ", "score": 65, "color": "#1E88E5"},
+            ("HAN", "PQC"): {"label": "Nhu cầu nghỉ dưỡng", "score": 45, "color": "#8E24AA"},
+            ("DAD", "SGN"): {"label": "Chuyến bay đêm", "score": 30, "color": "#5E35B1"},
+        }
 
-        # Grand total = ALL confirmed/paid bookings in the DB (not just top-4 sum)
-        try:
-            conn = get_connection()
-            cursor = conn.cursor()
-            cursor.execute("""
-                SELECT COUNT(*) FROM bookings
-                WHERE booking_status IN ('Confirmed', 'Paid')
-            """)
-            grand_total = cursor.fetchone()[0] or 1
-            conn.close()
-        except Exception:
-            grand_total = sum(r["count"] for r in top_routes) or 1
+        # Lấy số lượng vé đặt thực tế từ Database
+        real_bookings = _fetch_route_stats()
 
-        if top_routes:
-            for i, r in enumerate(top_routes):
-                pct = max(1, int(round(r["count"] / grand_total * 100)))
-                color = ROUTE_COLORS[i % len(ROUTE_COLORS)]
-                cnt   = r['count']
-                label = f"{cnt} đặt chỗ" if cnt != 1 else "1 đặt chỗ"
-                item = RouteItem(r["route"], label, pct, color)
-                self._routes_layout.addWidget(item)
-        else:
-            # Fallback: static placeholder data when DB has no bookings yet
-            fallback = [
-                ("SGN -> HAN", "Lưu lượng cao",       85, RED),
-                ("SGN -> DAD", "Cao điểm mùa vụ",     65, "#1E88E5"),
-                ("HAN -> PQC", "Nhu cầu nghỉ dưỡng",  45, "#8E24AA"),
-                ("DAD -> SGN", "Chuyến bay đêm",       30, "#5E35B1"),
-            ]
-            for route, label, pct, color in fallback:
-                item = RouteItem(route, label, pct, color)
-                self._routes_layout.addWidget(item)
+        # Gộp dữ liệu thực tế vào Base Data
+        for (dep, arr), count in real_bookings.items():
+            if (dep, arr) in base_data:
+                base_data[(dep, arr)]["score"] += count
+            else:
+                # Nếu khách đặt một tuyến bay mới hoàn toàn chưa có trong Base
+                base_data[(dep, arr)] = {
+                    "label": "Tuyến bay mới",
+                    "score": count * 5,  # Nhân hệ số để tuyến mới dễ leo top
+                    "color": "#F59E0B"   # Màu cam
+                }
+
+        # Sắp xếp danh sách theo % (score) giảm dần
+        sorted_routes = sorted(base_data.items(), key=lambda x: x[1]["score"], reverse=True)
+        
+        # Cắt lấy đúng 4 tuyến bay có điểm cao nhất
+        top_4 = sorted_routes[:4]
+
+        # Vẽ lên giao diện
+        for (dep, arr), info in top_4:
+            final_pct = min(100, int(info["score"])) # Giới hạn tỷ lệ tối đa là 100%
+            route_str = f"{dep} -> {arr}"
+            item = RouteItem(route_str, info["label"], final_pct, info["color"])
+            self._routes_layout.addWidget(item)
 
     def refresh(self):
-        """Public method: re-query DB and re-render route items."""
+        """Hàm này tự động được gọi mỗi khi bạn mở tab Tổng quan"""
         self._build_routes()
 
 
