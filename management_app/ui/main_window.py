@@ -370,18 +370,18 @@ class TopBar(QWidget):
             }}
         """)
 
-        display_name = account.display_name or "JetJet User"
+        display_name = account.full_name or account.username or "JetJet User"
 
         initials = "".join([
             x[0]
             for x in display_name.split()
-        ][:2])
+        ][:2]).upper()
 
-        name = QLabel(display_name)
+        # Đổi thành self.name_lbl và self.avatar để có thể gọi lại sau
+        self.name_lbl = QLabel(display_name)
+        self.avatar = AvatarCircle(initials)
 
-        avatar = AvatarCircle(initials)
-
-        name.setStyleSheet(f"""
+        self.name_lbl.setStyleSheet(f"""
             font-size: 13px;
             font-weight: bold;
             color: {TEXT_DARK};
@@ -397,24 +397,26 @@ class TopBar(QWidget):
         """)
 
         profile_col = QVBoxLayout()
-
         profile_col.setSpacing(0)
-
-        profile_col.addWidget(name)
-
+        profile_col.addWidget(self.name_lbl)
         profile_col.addWidget(role)
 
         layout.addWidget(self.page_title)
-
         layout.addStretch()
-
         layout.addWidget(search)
-
         layout.addSpacing(18)
-
-        layout.addWidget(avatar)
-
+        layout.addWidget(self.avatar)
         layout.addLayout(profile_col)
+
+    # THÊM HÀM NÀY VÀO CUỐI CLASS TopBar
+    def update_profile(self, account):
+        """Hàm này sẽ được gọi khi SettingsPage phát tín hiệu lưu thành công"""
+        display_name = account.full_name or account.username or "JetJet User"
+        initials = "".join([x[0] for x in display_name.split()][:2]).upper()
+        
+        self.name_lbl.setText(display_name)
+        self.avatar.initials = initials
+        self.avatar.update() 
 
 
 class MainWindow(QMainWindow):
@@ -480,9 +482,9 @@ class MainWindow(QMainWindow):
             StatisticsPage()
         )
 
-        self.pages.addWidget(
-            SettingsPage(account)
-        )
+        self.settings_page = SettingsPage(account)
+        self.settings_page.account_updated.connect(self.topbar.update_profile)
+        self.pages.addWidget(self.settings_page)
         
         body.addWidget(self.pages)
         root.addLayout(body)
