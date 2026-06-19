@@ -10,6 +10,12 @@ Fixed:
 from __future__ import annotations
 import hashlib, random, sys
 from datetime import datetime
+
+import smtplib
+import threading
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+
 from PySide6.QtCore import Qt, Signal, QRect, QRectF, QSize, QPoint
 from PySide6.QtGui import (
     QColor, QPainter, QBrush, QPen, QPainterPath,
@@ -25,6 +31,66 @@ from booking_app.ui.pages.booking_shared import (
     C_RED, C_RED2, C_DARK, C_WHITE, C_BG, C_BORDER,
     C_TEXT, C_MID, C_GRAY, C_LGRAY, C_GREEN, C_BLUE, C_ORANGE
 )
+
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+SMTP_EMAIL = os.getenv("SMTP_EMAIL")
+SMTP_APP_PASSWORD = os.getenv("SMTP_APP_PASSWORD")
+
+
+def send_ticket_email_async(ctx: dict):
+    def _send():
+        try:
+            to_email = ctx.get("passenger", {}).get("email")
+            if not to_email: return
+
+            pnr = ctx.get("pnr", "TBA")
+            name = ctx.get("passenger", {}).get("name", "Quý khách").upper()
+            flight = ctx.get("flight", {}).get("code", "TBA")
+            dep = ctx.get("flight", {}).get("dep", "TBA")
+            dst = ctx.get("flight", {}).get("dst", "TBA")
+            dep_t = ctx.get("flight", {}).get("dep_t", "TBA")
+            seats = ", ".join(ctx.get("seat_labels", []))
+            
+            msg = MIMEMultipart()
+            msg['From'] = SMTP_EMAIL
+            msg['To'] = to_email
+            msg['Subject'] = f"JetJet Air - Vé điện tử của chuyến bay {flight} ({pnr})"
+
+            body = f"""
+Kính gửi {name},
+
+Cảm ơn bạn đã lựa chọn JetJet Air! Đơn hàng của bạn đã được thanh toán và xác nhận thành công.
+
+✈️ THÔNG TIN CHUYẾN BAY:
+- Mã đặt chỗ (PNR): {pnr}
+- Chuyến bay: {flight}
+- Hành trình: {dep} ➔ {dst}
+- Giờ khởi hành: {dep_t}
+- Ghế ngồi: {seats}
+
+Vui lòng có mặt tại sân bay trước 2 tiếng để làm thủ tục. 
+Chúc bạn một chuyến bay tốt đẹp!
+
+Trân trọng,
+Đội ngũ JetJet Air.
+            """
+            msg.attach(MIMEText(body, 'plain', 'utf-8'))
+
+            server = smtplib.SMTP('smtp.gmail.com', 587)
+            server.starttls()
+            server.login(SMTP_EMAIL, SMTP_APP_PASSWORD)
+            server.send_message(msg)
+            server.quit()
+            print(f"Đã gửi vé thành công tới {to_email}")
+        except Exception as e:
+            print(f"Lỗi gửi email vé: {e}")
+
+    # Chạy ngầm để không làm giật màn hình của khách
+    threading.Thread(target=_send, daemon=True).start()
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 def _safe_get(d: dict | None, key: str, default=None):

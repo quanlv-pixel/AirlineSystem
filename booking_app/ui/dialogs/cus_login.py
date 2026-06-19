@@ -1,5 +1,7 @@
 import hashlib, sys, os, sqlite3, random, smtplib
 from email.mime.text import MIMEText
+from dotenv import load_dotenv
+load_dotenv()
 
 from PySide6.QtCore import Qt, Signal, QPoint
 from PySide6.QtGui import (
@@ -21,8 +23,8 @@ WHITE = "#FFFFFF"
 # =====================================================================
 # EMAIL SENDER CONFIGURATION (Bạn điền thông tin thật vào đây)
 # =====================================================================
-SMTP_EMAIL = "YOUR_EMAIL@gmail.com" 
-SMTP_APP_PASSWORD = "YOUR_APP_PASSWORD" 
+SMTP_EMAIL = os.getenv("SMTP_EMAIL")
+SMTP_APP_PASSWORD = os.getenv("SMTP_APP_PASSWORD")
 
 def send_otp_email(to_email, otp_code):
     try:
