@@ -540,8 +540,8 @@ class FlightsPage(QWidget):
 
         self.filter_box = QComboBox()
         self.filter_box.addItems([
-            "Tất cả", "Scheduled", "Boarding", "Delayed",
-            "In Air", "Gate Closed", "Completed",
+            "Tất cả", "Đã lên lịch", "Đang lên máy", "Chậm chuyến",
+            "Đang bay", "Đóng cổng", "Hoàn thành", "Đã hủy bỏ"
         ])
         self.filter_box.setFixedHeight(32)
         self.filter_box.setStyleSheet(f"""
@@ -661,21 +661,34 @@ class FlightsPage(QWidget):
 
         while self.rows_layout.count():
             item = self.rows_layout.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
+            if item.widget(): item.widget().deleteLater()
 
-        selected_status = self.filter_box.currentText()
+        selected_vi = self.filter_box.currentText()
+        # Từ điển map Tiếng Việt ngược lại Tiếng Anh
+        VI_TO_EN = {
+            "Tất cả": "Tất cả",
+            "Đã lên lịch": "Scheduled",
+            "Đang lên máy": "Boarding",
+            "Chậm chuyến": "Delayed",
+            "Đang bay": "In Air",
+            "Đóng cổng": "Gate Closed",
+            "Hoàn thành": "Completed",
+            "Đã hủy bỏ": "Canceled"
+        }
+        selected_en = VI_TO_EN.get(selected_vi, "Tất cả")
         shown = 0
 
         for flight in flights:
             status = flight.get("status") if isinstance(flight, dict) else getattr(flight, "status", "Scheduled")
             
-            if status == "Canceled":
+            # Ẩn các chuyến đã hủy NẾU KHÔNG cố tình chọn "Đã hủy bỏ"
+            if status == "Canceled" and selected_en != "Canceled":
                 continue
 
-            if selected_status != "Tất cả" and status != selected_status:
+            if selected_en != "Tất cả" and status != selected_en:
                 continue
 
+            # Lấy data an toàn
             if isinstance(flight, dict):
                 percent_raw  = flight.get("occupancy_percent")
                 if percent_raw is None:
@@ -706,6 +719,7 @@ class FlightsPage(QWidget):
                 "In Air":      "#7C3AED",
                 "Gate Closed": "#B45309",
                 "Completed":   "#64748B",
+                "Canceled":    "#9CA3AF"
             }
             status_color = color_map.get(status, "#16A34A")
 

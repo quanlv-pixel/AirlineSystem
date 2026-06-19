@@ -5,6 +5,8 @@ from PySide6.QtWidgets import (
     QFrame, QScrollArea, QComboBox
 )
 
+from shared.services.passenger_service import get_all_passengers_enriched
+
 try:
     from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
     from matplotlib.figure import Figure
@@ -349,18 +351,30 @@ class StatisticsPage(QWidget):
         self.load_statistics(0)
 
     def load_statistics(self, index=0):
-        # 1. Tính toán Data
-        if index > 6: # Các tháng chưa có data
-            rev = 0
-            flt = 0
-            pax = 0
-            load = 0
+        if index > 6: 
+            rev, flt, pax, load = 0, 0, 0, 0
         else:
+            db_pax = get_all_passengers_enriched()
+            db_emails = {getattr(p, 'email', '') for p in db_pax}
+            extra_mock = [p for p in MOCK_VIP_PASSENGERS if getattr(p, 'email', '') not in db_emails]
+            all_pax = list(db_pax) + extra_mock
+            
             if index == 0:   
-                filtered_pax = MOCK_VIP_PASSENGERS
+                filtered_pax = all_pax
                 filtered_flights = MOCK_FLIGHTS
-            else:            
-                filtered_pax = [p for p in MOCK_VIP_PASSENGERS if getattr(p, 'month', 0) == index]
+            else:
+                # Xử lý lọc tháng (Mock có field month, DB cần cắt từ created_at)
+                filtered_pax = []
+                for p in all_pax:
+                    m = getattr(p, 'month', None)
+                    if m is None and getattr(p, 'created_at', None):
+                        try:
+                            m = int(str(p.created_at)[5:7]) # Lấy tháng từ YYYY-MM-DD
+                        except:
+                            m = 0
+                    if m == index:
+                        filtered_pax.append(p)
+                        
                 filtered_flights = [f for f in MOCK_FLIGHTS if getattr(f, 'month', 0) == index]
 
             rev = sum(getattr(p, "total_spending", 0) for p in filtered_pax)
@@ -372,13 +386,10 @@ class StatisticsPage(QWidget):
             else:
                 load = 0
 
-        # 2. Update thẻ UI
         self._card_revenue.set_value(f"${rev:,.0f}")
         self._card_flights.set_value(str(flt))
         self._card_passengers.set_value(str(pax))
         self._card_load.set_value(f"{load:.1f}%" if load > 0 else "0%")
-
-        # 3. Update Chart
         self.chart.update_chart(index, rev)
 
     def _on_time_filter(self, index: int) -> None:

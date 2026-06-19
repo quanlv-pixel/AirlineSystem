@@ -150,6 +150,20 @@ from shared.models.flight import Flight
 
 MOCK_FLIGHTS: list = []
 for i in range(1, 61):
+    status = random.choice(["Scheduled", "Completed", "Delayed", "In Air", "Gate Closed", "Boarding", "Canceled"])
+    
+    # Logic tỷ lệ chỗ ngồi (Occupancy logic)
+    if status in ["Scheduled", "Delayed"]:
+        occ = random.uniform(0.1, 0.89)  # 10% -> 89%
+    elif status in ["Completed", "In Air", "Gate Closed"]:
+        occ = random.uniform(0.9, 1.0)   # 90% -> 100%
+    elif status == "Boarding":
+        occ = random.uniform(0.7, 0.95)  # 70% -> 95%
+    else: # Canceled
+        occ = 0.0
+        
+    avail_seats = int(180 * (1 - occ))
+
     MOCK_FLIGHTS.append(Flight(
         flight_id=i,
         flight_number=f"JJ{100+i}",
@@ -157,8 +171,8 @@ for i in range(1, 61):
         departure=random.choice(["SGN", "HAN", "DAD"]),
         destination=random.choice(["PQC", "CXR", "SIN", "ICN", "NRT"]),
         total_seats=180,
-        available_seats=random.randint(0, 150),
+        available_seats=avail_seats,
         ticket_price=random.randint(50, 200),
-        status=random.choice(["Scheduled", "Completed", "Delayed", "In Air"]),
-        month=random.randint(1, 6) # Gán tháng 1-6 để vẽ biểu đồ
+        status=status,
+        month=random.randint(1, 6)
     ))

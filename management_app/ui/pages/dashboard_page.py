@@ -480,15 +480,23 @@ class DashboardPage(QWidget):
     @staticmethod
     def _fetch_stats():
         try:
-            total_pax = len(MOCK_VIP_PASSENGERS)
-            total_revenue = sum(getattr(p, 'total_spending', 0) for p in MOCK_VIP_PASSENGERS)
+            from shared.services.passenger_service import get_all_passengers_enriched
+            
+            # Gộp dữ liệu hành khách (DB + Mock VIP)
+            db_pax = get_all_passengers_enriched()
+            db_emails = {getattr(p, 'email', '') for p in db_pax}
+            extra_mock = [p for p in MOCK_VIP_PASSENGERS if getattr(p, 'email', '') not in db_emails]
+            
+            total_pax = len(db_pax) + len(extra_mock)
+            total_revenue = sum(getattr(p, 'total_spending', 0) for p in (list(db_pax) + extra_mock))
             total_flights = len(MOCK_FLIGHTS)
             
-            # Đếm số yêu cầu đặt chỗ dựa trên số tickets của từng VIP Passenger
-            active_bookings = sum(getattr(p, 'tickets', 1) for p in MOCK_VIP_PASSENGERS)
+            # Đếm số yêu cầu đặt chỗ
+            active_bookings = sum(getattr(p, 'tickets', 1) for p in (list(db_pax) + extra_mock))
             
             return total_flights, total_pax, active_bookings, total_revenue
         except Exception as e:
+            print("Lỗi fetch dashboard:", e)
             return 0, 0, 0, 0
 
     # ── Public API ─────────────────────────────────────────────
