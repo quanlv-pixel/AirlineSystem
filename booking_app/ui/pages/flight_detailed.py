@@ -1,99 +1,126 @@
-"""
-flight_detail_page.py
----------------------
-Flight Detail Page for the booking application.
-Fixed: Safe initialization and dynamic update_page() method.
-"""
 from __future__ import annotations
 import sys
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import (QColor, QPainter, QBrush, QPen,
-                            QPainterPath, QLinearGradient, QFont)
+from PySide6.QtGui import QColor, QFont
 from PySide6.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QLabel, QPushButton, QFrame, QScrollArea, QSizePolicy
+    QApplication, QWidget, QVBoxLayout, QHBoxLayout,
+    QLabel, QFrame, QSizePolicy, QPushButton
 )
-from booking_app.ui.pages.booking_shared import (lbl, h_sep, card_style, red_btn, page_header,
-                             NavBar, NavLogo,
-                             C_RED, C_RED2, C_DARK, C_WHITE, C_BG,
-                             C_BORDER, C_TEXT, C_MID, C_GRAY, C_LGRAY,
-                             C_GREEN, C_BLUE, C_ORANGE)
-
-SAMPLE_FLIGHT = dict(
-    fid=1, code="JJ101", aircraft="AIRBUS A321 NEO",
-    dep="SGN", dst="HAN", dep_t="08:00", arr_t="10:15",
-    dur="2H 15M", direct=True, seats=42, price=120,
-    dep_full="Tân Sơn Nhất (Ga quốc nội)",
-    dst_full="Nội Bài (Ga quốc nội)",
+from booking_app.ui.pages.booking_shared import (
+    lbl, h_sep, card_style, red_btn, page_header,
+    C_RED, C_DARK, C_WHITE, C_BG, C_BORDER, C_TEXT, C_MID, C_GRAY
 )
 
-class FlightTimeline(QWidget):
+class FlightDetailCard(QFrame):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setFixedHeight(36)
-        self.setStyleSheet("background:transparent;")
+        self.setStyleSheet(card_style())
+        self._lay = QVBoxLayout(self)
+        self._lay.setContentsMargins(24, 24, 24, 24)
+        self._lay.setSpacing(16)
 
-    def paintEvent(self, _):
-        p = QPainter(self); p.setRenderHint(QPainter.Antialiasing)
-        w, h = self.width(), self.height(); cy = h // 2
-        pen = QPen(QColor(C_BORDER), 1.5, Qt.DashLine); pen.setDashPattern([6, 4])
-        p.setPen(pen); p.drawLine(0, cy, w // 2 - 22, cy); p.drawLine(w // 2 + 22, cy, w, cy)
-        p.setPen(QPen(QColor(C_RED))); f = QFont(); f.setPointSize(16)
-        p.setFont(f); p.drawText(w // 2 - 14, 0, 28, h, Qt.AlignCenter, "✈")
+    def update_data(self, ctx: dict):
+        while self._lay.count():
+            child = self._lay.takeAt(0)
+            if child.widget(): child.widget().deleteLater()
+        
+        # SỬA LỖI Ở ĐÂY: Dùng `or {}` để đảm bảo luôn là một Dictionary, tránh bị None
+        flight = ctx.get("flight") or {}
+        ret_flight = ctx.get("flight_return") or {}
+        is_rt = ctx.get("is_roundtrip", False)
 
-class FlightDetailCard(QWidget):
+        title = lbl("Chi tiết Hành trình", 18, 800, C_TEXT)
+        self._lay.addWidget(title)
+        self._lay.addWidget(h_sep())
+
+        # Render Chuyến đi (Chỉ render khi thực sự đã chọn chuyến bay)
+        if flight:
+            self._build_flight_info(flight, "CHUYẾN ĐI")
+
+        # Render Chuyến về nếu là Khứ hồi
+        if is_rt and ret_flight:
+            self._lay.addSpacing(10)
+            self._lay.addWidget(h_sep())
+            self._lay.addSpacing(10)
+            self._build_flight_info(ret_flight, "CHUYẾN VỀ")
+        
+        self._lay.addStretch()
+
+    def _build_flight_info(self, f: dict, title: str):
+        self._lay.addWidget(lbl(title, 14, 800, C_RED))
+        
+        row1 = QHBoxLayout()
+        row1.addWidget(lbl(f.get("code", "N/A"), 16, 800, C_DARK))
+        row1.addStretch()
+        row1.addWidget(lbl(f.get("aircraft", "AIRBUS"), 12, 500, C_GRAY))
+        self._lay.addLayout(row1)
+
+        row2 = QHBoxLayout()
+        row2.addWidget(lbl(f"{f.get('dep_t', '--:--')} ➔ {f.get('arr_t', '--:--')}", 20, 800, C_TEXT))
+        row2.addStretch()
+        self._lay.addLayout(row2)
+
+        row3 = QHBoxLayout()
+        row3.addWidget(lbl(f"Từ {f.get('dep')} đến {f.get('dst')}", 13, 500, C_MID))
+        row3.addStretch()
+        self._lay.addLayout(row3)
+
+class CostCard(QFrame):
+    proceed = Signal(dict)
+
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setStyleSheet(card_style(20))
-        self._root = QVBoxLayout(self)
-        self._root.setContentsMargins(28, 24, 28, 24); self._root.setSpacing(0)
-        self._ui_initialized = False
+        self.ctx = {}
+        self.setStyleSheet(card_style())
+        self._lay = QVBoxLayout(self)
+        self._lay.setContentsMargins(24, 24, 24, 24)
+        self._lay.setSpacing(12)
 
-    def update_data(self, flight: dict):
-        # Clear existing layout
-        while self._root.count():
-            child = self._root.takeAt(0)
+    def update_data(self, ctx: dict):
+        self.ctx = ctx
+        while self._lay.count():
+            child = self._lay.takeAt(0)
             if child.widget(): child.widget().deleteLater()
             elif child.layout(): self._clear_layout(child.layout())
 
-        # Header
-        hdr = QHBoxLayout(); badge = self._dark_badge(52); hdr.addWidget(badge); hdr.addSpacing(16)
-        code_col = QVBoxLayout(); code_col.setSpacing(3)
-        code_col.addWidget(lbl(flight.get("code", "N/A"), 16, 800, C_TEXT))
-        code_col.addWidget(lbl(flight.get("aircraft", "—"), 12, 600, C_RED))
-        hdr.addLayout(code_col); hdr.addStretch()
-        status_col = QVBoxLayout(); status_col.setAlignment(Qt.AlignRight)
-        status_col.addWidget(lbl("TRẠNG THÁI", 10, 600, C_GRAY, 1.0))
-        status_lbl = lbl("ĐANG MỞ BÁN", 12, 700, C_GREEN); status_lbl.setAlignment(Qt.AlignRight)
-        status_col.addWidget(status_lbl); hdr.addLayout(status_col)
-        self._root.addLayout(hdr); self._root.addSpacing(28)
+        self._lay.addWidget(lbl("Tóm tắt Chi phí", 18, 800, C_TEXT))
+        self._lay.addSpacing(8)
 
-        # Times
-        times = QHBoxLayout(); times.setSpacing(0)
-        dep_col = QVBoxLayout(); dep_col.setSpacing(4)
-        dep_t = lbl(flight.get("dep_t", "--:--"), 52, 800, C_TEXT)
-        dep_col.addWidget(dep_t); dep_col.addWidget(lbl(flight.get("dep", ""), 18, 800, C_TEXT))
-        dep_col.addWidget(lbl(flight.get("dep_full", ""), 12, 400, C_GRAY)); times.addLayout(dep_col)
+        is_rt = ctx.get("is_roundtrip", False)
+        multiplier = 2 if is_rt else 1
 
-        tl_col = QVBoxLayout(); tl_col.setAlignment(Qt.AlignCenter)
-        tl_col.addWidget(lbl(flight.get("dur", "—"), 11, 600, C_GRAY)); tl_col.addWidget(FlightTimeline())
-        direct = QHBoxLayout(); direct.setAlignment(Qt.AlignCenter); direct.setSpacing(5)
-        direct.addWidget(lbl("●", 10, 700, C_RED)); direct.addWidget(lbl("BAY THẲNG (DIRECT)", 11, 600, C_GRAY, 0.5))
-        tl_col.addLayout(direct); times.addLayout(tl_col, 1)
+        base_avg = ctx.get("base_price", 0)
+        base_total = base_avg * multiplier
+        tax_total = 45 * multiplier
+        fee_total = 12 * multiplier
+        grand_total = base_total + tax_total + fee_total
 
-        arr_col = QVBoxLayout(); arr_col.setSpacing(4); arr_col.setAlignment(Qt.AlignRight)
-        arr_t = lbl(flight.get("arr_t", "--:--"), 52, 800, C_TEXT); arr_col.addWidget(arr_t)
-        arr_col.addWidget(lbl(flight.get("dst", ""), 18, 800, C_TEXT))
-        arr_col.addWidget(lbl(flight.get("dst_full", ""), 12, 400, C_GRAY)); times.addLayout(arr_col)
-        self._root.addLayout(times); self._root.addSpacing(28); self._root.addWidget(h_sep()); self._root.addSpacing(18)
+        def _row(k, v, b=False, c=C_TEXT):
+            r = QHBoxLayout()
+            r.addWidget(lbl(k, 13, 600 if b else 400, C_MID if not b else c))
+            r.addStretch()
+            r.addWidget(lbl(v, 13, 700 if b else 500, c))
+            return r
 
-        # Footer
-        info_row = QHBoxLayout(); info_row.setSpacing(0)
-        for icon, key, val in [("🗺", "LỖ TRÌNH", "7,240 km / 4,498 miles"), ("🕐", "DỰ KIẾN",  "Đúng giờ (On-time)"), ("🛡", "BẢO HIỂM", "Đã bao gồm trong giá")]:
-            item = QVBoxLayout(); item.setSpacing(4)
-            top = QHBoxLayout(); top.setSpacing(6); top.addWidget(lbl(icon, 14, 400, C_GRAY)); top.addWidget(lbl(key, 11, 600, C_GRAY, 0.5))
-            item.addLayout(top); item.addWidget(lbl(val, 13, 700, C_TEXT)); info_row.addLayout(item); info_row.addStretch()
-        self._root.addLayout(info_row)
+        trip_type = "Giá vé (Khứ hồi)" if is_rt else "Giá vé (Một chiều)"
+        self._lay.addLayout(_row(trip_type, f"${base_total:.0f}"))
+        self._lay.addLayout(_row("Thuế sân bay", f"${tax_total:.0f}"))
+        self._lay.addLayout(_row("Phí dịch vụ", f"${fee_total:.0f}"))
+
+        self._lay.addSpacing(10)
+        self._lay.addWidget(h_sep())
+        self._lay.addSpacing(10)
+
+        tot_r = QHBoxLayout()
+        tot_r.addWidget(lbl("TỔNG CỘNG", 14, 800, C_DARK))
+        tot_r.addStretch()
+        tot_r.addWidget(lbl(f"${grand_total:.0f}", 24, 800, C_RED))
+        self._lay.addLayout(tot_r)
+
+        self._lay.addSpacing(16)
+        btn = red_btn("TIẾP TỤC ➔", 46)
+        btn.clicked.connect(self._on_proceed)
+        self._lay.addWidget(btn)
 
     def _clear_layout(self, layout):
         while layout.count():
@@ -101,90 +128,42 @@ class FlightDetailCard(QWidget):
             if child.widget(): child.widget().deleteLater()
             elif child.layout(): self._clear_layout(child.layout())
 
-    def _dark_badge(self, size=52):
-        w = QWidget(); w.setFixedSize(size, size)
-        class _B(QWidget):
-            def __init__(self, s): super().__init__(); self.setFixedSize(s, s)
-            def paintEvent(self, _):
-                p = QPainter(self); p.setRenderHint(QPainter.Antialiasing); s = self.width()
-                pp = QPainterPath(); pp.addEllipse(0, 0, s, s); p.fillPath(pp, QBrush(QColor(C_DARK)))
-                p.setPen(QPen(QColor(C_WHITE))); f = QFont(); f.setPointSize(int(s*0.38)); f.setWeight(QFont.Bold)
-                p.setFont(f); p.drawText(0, 0, s, s, Qt.AlignCenter, "✈")
-        return _B(size)
-
-class CostCard(QWidget):
-    proceed = Signal()
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setStyleSheet(card_style(20))
-        self._root = QVBoxLayout(self)
-        self._root.setContentsMargins(24, 24, 24, 24); self._root.setSpacing(0)
-
-    def update_data(self, flight: dict):
-        while self._root.count():
-            child = self._root.takeAt(0)
-            if child.widget(): child.widget().deleteLater()
-            elif child.layout(): self._clear_layout(child.layout())
-
-        self._root.addWidget(lbl("Tổng kết Chi phí", 18, 800, C_TEXT)); self._root.addSpacing(20)
-        base = flight.get("price", 0); tax = 45; fee = 12; total = base + tax + fee
-        for title, amount in [("Giá vé cơ bản", f"${base}"), ("Thuế & Phí sân bay", f"${tax}"), ("Phí quản trị hệ thống", f"${fee}")]:
-            row = QHBoxLayout(); row.addWidget(lbl(title, 13, 400, C_MID)); row.addStretch(); row.addWidget(lbl(amount, 13, 600, C_TEXT)); self._root.addLayout(row); self._root.addSpacing(12)
-        self._root.addWidget(h_sep()); self._root.addSpacing(16)
-        total_row = QHBoxLayout(); total_row.addWidget(lbl("TỔNG CỘNG", 11, 700, C_GRAY, 1.0)); total_row.addStretch()
-        total_row.addWidget(lbl(f"${total}", 30, 900, C_TEXT)); self._root.addLayout(total_row); self._root.addSpacing(20)
-        btn = red_btn("TIẾP TỤC ĐẶT CHỖ  →", 52); btn.clicked.connect(self.proceed); self._root.addWidget(btn); self._root.addSpacing(12)
-        note = QHBoxLayout(); note.setSpacing(5); note.addWidget(lbl("●", 10, 400, C_GRAY)); note.addWidget(lbl("GIÁ VÉ CÓ THỂ THAY ĐỔI SAU 10 PHÚT", 10, 500, C_GRAY, 0.5))
-        self._root.addLayout(note); self._root.addStretch()
-
-    def _clear_layout(self, layout):
-        while layout.count():
-            child = layout.takeAt(0)
-            if child.widget(): child.widget().deleteLater()
-            elif child.layout(): self._clear_layout(child.layout())
-
-class BaggageCard(QWidget):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setStyleSheet(card_style(16))
-        lay = QHBoxLayout(self); lay.setContentsMargins(22, 18, 22, 18); lay.setSpacing(16)
-        icon = lbl("ℹ", 18, 700, C_BLUE); icon.setFixedWidth(24); lay.addWidget(icon)
-        text_col = QVBoxLayout(); text_col.setSpacing(6)
-        text_col.addWidget(lbl("QUY ĐỊNH VỀ HÀNH LÝ", 12, 700, C_TEXT, 1.0))
-        for item in ["Miễn phí 07kg hành lý xách tay.", "Ưu đãi mua thêm hành lý ký gửi ngay khi đặt chỗ."]:
-            r = QHBoxLayout(); r.setSpacing(6); r.addWidget(lbl("•", 12, 400, C_MID)); r.addWidget(lbl(item, 12, 400, C_MID)); r.addStretch(); text_col.addLayout(r)
-        lay.addLayout(text_col)
+    def _on_proceed(self):
+        # Tính toán lại tổng để pass đi
+        mult = 2 if self.ctx.get("is_roundtrip") else 1
+        self.ctx["total"] = (self.ctx.get("base_price", 0) + 45 + 12) * mult
+        self.proceed.emit(self.ctx)
 
 class FlightDetailPage(QWidget):
     proceed = Signal(dict)
     go_back = Signal()
 
-    def __init__(self, flight: dict | None = None, parent=None):
+    def __init__(self, ctx: dict | None = None, parent=None):
         super().__init__(parent)
-        self.flight = flight
+        self.ctx = ctx or {}
         self.setStyleSheet(f"background:{C_BG};")
-        root = QVBoxLayout(self); root.setContentsMargins(28, 24, 28, 28); root.setSpacing(20)
-        root.addLayout(page_header("Chi tiết Chuyến bay", "Bước 2: Xác nhận lịch trình dự kiến", on_back=self.go_back))
-        body = QHBoxLayout(); body.setSpacing(20)
-        self._card = FlightDetailCard(); body.addWidget(self._card, 63)
-        self._cost = CostCard(); self._cost.proceed.connect(self._on_proceed); body.addWidget(self._cost, 37)
-        root.addLayout(body); root.addStretch()
-        if self.flight: self.update_page(self.flight)
+        root = QVBoxLayout(self)
+        root.setContentsMargins(28, 24, 28, 28)
+        root.setSpacing(20)
+        
+        root.addLayout(page_header("Chi tiết Hành trình", "Bước 2: Xác nhận lịch trình và chi phí", on_back=self.go_back))
+        
+        body = QHBoxLayout()
+        body.setSpacing(20)
+        
+        self._card = FlightDetailCard()
+        body.addWidget(self._card, 63)
+        
+        self._cost = CostCard()
+        self._cost.proceed.connect(self.proceed.emit)
+        body.addWidget(self._cost, 37)
+        
+        root.addLayout(body)
+        root.addStretch()
+        if self.ctx: self.update_page(self.ctx)
 
-    def update_page(self, flight: dict | None = None):
-        if flight: self.flight = flight
-        if self.flight:
-            self._card.update_data(self.flight)
-            self._cost.update_data(self.flight)
-
-    def _on_proceed(self):
-        if not self.flight: return
-        ctx = dict(flight=self.flight, base_price=self.flight.get("price", 0), tax=45, fee=12, total=self.flight.get("price", 0) + 57)
-        self.proceed.emit(ctx)
-
-if __name__ == "__main__":
-    app = QApplication(sys.argv); app.setStyle("Fusion")
-    win = QMainWindow(); win.resize(1380, 860)
-    w = QWidget(); lay = QVBoxLayout(w); lay.addWidget(NavBar(0)); lay.addWidget(FlightDetailPage(SAMPLE_FLIGHT))
-    win.setCentralWidget(w); win.show(); sys.exit(app.exec())
+    def update_page(self, ctx: dict | None = None):
+        if ctx: self.ctx = ctx
+        if self.ctx:
+            self._card.update_data(self.ctx)
+            self._cost.update_data(self.ctx)

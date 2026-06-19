@@ -102,7 +102,7 @@ class FlightsPage(QWidget):
         vbox = QVBoxLayout(search_box)
         vbox.setContentsMargins(20, 16, 20, 16); vbox.setSpacing(12)
 
-        # Trip Type Radios
+        # Chỉ giữ lại Checkbox Một chiều / Khứ hồi
         rdo_lay = QHBoxLayout()
         self.rdo_oneway = QRadioButton("Một chiều")
         self.rdo_roundtrip = QRadioButton("Khứ hồi")
@@ -110,7 +110,6 @@ class FlightsPage(QWidget):
         rdo_style = f"font-size: 14px; font-weight: 700; color: {C_TEXT};"
         self.rdo_oneway.setStyleSheet(rdo_style)
         self.rdo_roundtrip.setStyleSheet(rdo_style)
-        self.rdo_roundtrip.toggled.connect(self._on_trip_type_changed)
         
         rdo_lay.addWidget(self.rdo_oneway)
         rdo_lay.addSpacing(20)
@@ -128,49 +127,29 @@ class FlightsPage(QWidget):
         """)
         self.search_bar.textChanged.connect(self._filter_cards)
         spanel.addWidget(lbl("🔍", size=16))
-        spanel.addWidget(self.search_bar, 2)
-
-        date_style = f"""
-            QDateEdit {{ background: #F8F9FB; border: 1.5px solid {C_BORDER}; border-radius: 10px; padding: 0 10px; font-size: 13px; color: {C_TEXT}; }}
-            QDateEdit:focus {{ border-color: {C_RED}; background: {C_WHITE}; }}
-            QDateEdit::drop-down {{ border: none; width: 30px; }}
-        """
-        self.date_dep = QDateEdit(QDate.currentDate())
-        self.date_dep.setCalendarPopup(True)
-        self.date_dep.setFixedHeight(44)
-        self.date_dep.setStyleSheet(date_style)
-        spanel.addWidget(lbl("Ngày đi:", size=12, weight=600, color=C_MID))
-        spanel.addWidget(self.date_dep, 1)
-
-        self.date_ret = QDateEdit(QDate.currentDate().addDays(3))
-        self.date_ret.setCalendarPopup(True)
-        self.date_ret.setFixedHeight(44)
-        self.date_ret.setStyleSheet(date_style)
-        self.date_ret.setEnabled(False)
-        spanel.addWidget(lbl("Ngày về:", size=12, weight=600, color=C_MID))
-        spanel.addWidget(self.date_ret, 1)
+        spanel.addWidget(self.search_bar, 1)
 
         vbox.addLayout(spanel)
         main_lay.addWidget(search_box)
 
-        self.scroll = QScrollArea(); self.scroll.setWidgetResizable(True)
+        # ── ĐÂY LÀ PHẦN BỊ XÓA NHẦM GÂY RA LỖI, ĐÃ ĐƯỢC THÊM LẠI ──
+        self.scroll = QScrollArea()
+        self.scroll.setWidgetResizable(True)
         self.scroll.setStyleSheet("background:transparent;border:none;")
-        self.scroll_widget = QWidget(); self.scroll_widget.setStyleSheet("background:transparent;")
+        self.scroll_widget = QWidget()
+        self.scroll_widget.setStyleSheet("background:transparent;")
+        
         self.list_layout = QVBoxLayout(self.scroll_widget)
-        self.list_layout.setSpacing(15); self.list_layout.setContentsMargins(0, 0, 0, 0)
+        self.list_layout.setSpacing(15)
+        self.list_layout.setContentsMargins(0, 0, 0, 0)
+        
         self.scroll.setWidget(self.scroll_widget)
         main_lay.addWidget(self.scroll, 1)
 
         self._load_all_flights()
 
-    def _on_trip_type_changed(self):
-        self.date_ret.setEnabled(self.rdo_roundtrip.isChecked())
-
     def _on_flight_chosen(self, flight: dict):
         flight["is_roundtrip"] = self.rdo_roundtrip.isChecked()
-        flight["date_dep_str"] = self.date_dep.date().toString("dd/MM/yyyy")
-        if flight["is_roundtrip"]:
-            flight["date_ret_str"] = self.date_ret.date().toString("dd/MM/yyyy")
         self.flight_selected.emit(flight)
 
     def _load_all_flights(self):
@@ -281,7 +260,7 @@ class BookingWindow(QMainWindow):
         self.page_members    = MembersPage(account=self.account)
         self.page_cur_mem    = CurrentMemberPage(account=self.account)
 
-        self.step2_detail    = FlightDetailPage(None)
+        self.step2_detail    = FlightDetailPage(self.ctx)
         self.step3_passenger = PassengerInfoPage(self.ctx)
         self.step4_seats     = SeatMapPage(self.ctx)
         self.step6_confirm   = ConfirmPage(self.ctx)
@@ -361,7 +340,7 @@ class BookingWindow(QMainWindow):
         is_rt = flight_data.get("is_roundtrip", False)
 
         if is_rt and not self.ctx.get("is_selecting_return", False):
-            # Lần 1: Chọn chuyến đi
+            # Lần 1: Khách vừa chọn chuyến đi
             self.ctx["flight"] = flight_data
             self.ctx["outbound_price"] = flight_data.get("price", 0)
             self.ctx["is_roundtrip"] = True
@@ -372,38 +351,39 @@ class BookingWindow(QMainWindow):
             self.step1_search.page_title.setStyleSheet(f"font-size: 24px; font-weight: 800; color: {C_RED};")
             self.step1_search.page_desc.setText(f"Hành trình: {flight_data['dst']} ➔ {flight_data['dep']}")
 
-            # Lọc hiển thị chuyến bay ngược lại
             self.step1_search.filter_return_flights(flight_data["dst"], flight_data["dep"])
             QMessageBox.information(self, "Chuyến đi", "Đã chọn chuyến ĐI thành công. Vui lòng chọn tiếp chuyến VỀ!")
             return
 
         if self.ctx.get("is_selecting_return", False):
-            # Lần 2: Chọn chuyến về
+            # Lần 2: Khách vừa chọn chuyến về
             self.ctx["flight_return"] = flight_data
             outbound_price = self.ctx.get("outbound_price", 0)
             return_price = flight_data.get("price", 0)
 
-            # Trick để payment.py tính toán đúng: base_price = trung bình cộng 2 chuyến
+            # Tính giá trung bình để khi Payment nhân x2 sẽ ra đúng tổng tiền 2 vé
             self.ctx["base_price"] = (outbound_price + return_price) / 2
             self.ctx["is_selecting_return"] = False
-
-            # Reset UI
             self.step1_search.reset_ui()
         else:
-            # Một chiều
+            # Luồng Một chiều bình thường
             self.ctx["flight"] = flight_data
             self.ctx["base_price"] = flight_data.get("price", 0)
             self.ctx["is_roundtrip"] = False
             self.ctx["flight_return"] = None
 
-        self.ctx["total"] = self.ctx["base_price"] + self.ctx["tax"] + self.ctx["fee"]
+        # Khởi tạo các giá trị thuế phí
+        multiplier = 2 if self.ctx["is_roundtrip"] else 1
+        self.ctx["tax"] = 45
+        self.ctx["fee"] = 12
+        self.ctx["total"] = (self.ctx["base_price"] + self.ctx["tax"] + self.ctx["fee"]) * multiplier
+
         self.ctx["promo_used"] = None
         self._booking_saved = False
         self.ctx["seats"] = []
         self.ctx["seat_labels"] = []
 
-        if hasattr(self.step2_detail, 'flight'):
-            self.step2_detail.flight = self.ctx["flight"]
+        # Truyền ĐÚNG giỏ hàng (self.ctx) qua trang 2
         self._call_update_and_switch(self.step2_detail, 4)
 
     def _to_step3_passenger(self, updated_ctx: dict):
