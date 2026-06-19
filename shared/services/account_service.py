@@ -25,6 +25,7 @@ def _row_to_account(row: tuple) -> Account:
         created_at=row[7],
         last_login=row[8],
         is_activated=row[9] if len(row) > 9 else 0,
+        balance=row[10] if len(row) > 10 else 0.0,
     )
 
 
@@ -40,7 +41,7 @@ def login(identifier: str, password: str) -> Account | None:
         cursor.execute(
             """
             SELECT account_id, username, email, password_hash,
-                   full_name, role, phone, created_at, last_login, is_activated
+                   full_name, role, phone, created_at, last_login, is_activated, balance
             FROM accounts
             WHERE (email = ? OR username = ?) AND password_hash = ?
             """,

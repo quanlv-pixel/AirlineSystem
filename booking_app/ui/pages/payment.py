@@ -105,8 +105,41 @@ class OrderSummary(QWidget):
 
     # ── Build / rebuild UI ────────────────────────────────────────────────────
     def update_data(self, ctx: dict):
-        self._ctx = ctx
-        # Reset promo state when order refreshed
+        pnr = ctx.get("pnr", "TBA")
+        flight = ctx.get("flight", {})
+        pax = ctx.get("passenger", {})
+        seats = ctx.get("seat_labels", [])
+        
+        # SỬA LỖI HIỂN THỊ HÀNH KHÁCH
+        name = pax.get("name", "TBA").upper()
+        if len(seats) > 1:
+            name += f" (+{len(seats) - 1} người)"
+        
+        self.lbl_pnr.setText(pnr)
+        self.lbl_flt.setText(flight.get("code", "N/A"))
+        self.lbl_pax.setText(name)
+        self.lbl_seat.setText(", ".join(seats) if seats else "N/A")
+
+        base = ctx.get("base_price", 0) * len(seats)
+        tax = ctx.get("tax", 0) * len(seats)
+        fee = ctx.get("fee", 0) * len(seats)
+        seat_f = ctx.get("seat_fee", 0)
+
+        # Tính toán mã giảm giá
+        promo_code = ctx.get("promo_used")
+        subtotal = base + tax + fee + seat_f
+        total = subtotal
+        if promo_code:
+            _, total = apply_promo(promo_code, subtotal)
+        
+        ctx["total"] = total  # Lưu lại tổng tiền thật
+
+        self.lbl_base.setText(f"${base}")
+        self.lbl_tax.setText(f"${tax}")
+        self.lbl_fee.setText(f"${fee}")
+        self.lbl_seat_fee.setText(f"${seat_f}")
+        self.lbl_total.setText(f"${total:,.2f}")
+
         self._discounted_total = None
         self._applied_code = None
         self._rebuild()

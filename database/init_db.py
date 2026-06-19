@@ -41,7 +41,6 @@ def init_db():
     # =========================================================
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS accounts (
-
             account_id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT NOT NULL UNIQUE,
             email TEXT NOT NULL UNIQUE,
@@ -50,6 +49,7 @@ def init_db():
             role TEXT NOT NULL DEFAULT 'customer',
             phone TEXT,
             is_activated INTEGER DEFAULT 0,
+            balance REAL DEFAULT 0.0, 
             created_at TEXT DEFAULT CURRENT_TIMESTAMP,
             last_login TEXT
         )

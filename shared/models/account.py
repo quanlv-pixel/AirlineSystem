@@ -13,6 +13,7 @@ class Account:
         created_at: str = None,
         last_login: str = None,
         is_activated: int = 0,
+        balance: float = 0.0,
     ):
         self.account_id = account_id
         self.username = username
@@ -24,6 +25,7 @@ class Account:
         self.created_at = created_at
         self.last_login = last_login
         self.is_activated = is_activated
+        self.balance = balance
 
     @property
     def display_name(self) -> str:

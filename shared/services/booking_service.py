@@ -117,31 +117,43 @@ def get_booking_history_by_user(username: str):
 
 def cancel_booking(booking_id: int) -> bool:
     """
-    Marks a booking as Cancelled and releases its seat back to inventory.
-    Returns True on success, False on failure.
+    Hủy vé -> Hoàn 80% vào Số dư -> Trừ tổng chi tiêu VIP -> Giải phóng ghế.
     """
     conn = get_connection()
     cursor = conn.cursor()
     try:
-        # Fetch flight_id and seat_number before updating
+        # 1. Lấy thông tin chuyến bay, ghế, số tiền, user
         cursor.execute(
-            "SELECT flight_id, seat_number FROM bookings WHERE booking_id = ?",
+            "SELECT flight_id, seat_number, total_amount, passenger_id, created_by FROM bookings WHERE booking_id = ?",
             (booking_id,)
         )
         row = cursor.fetchone()
-        if row is None:
-            return False
-        flight_id   = row["flight_id"]
-        seat_number = row["seat_number"]
+        if not row: return False
+        
+        flight_id, seat_number, total_amount, passenger_id, created_by = row[0], row[1], row[2] or 0, row[3], row[4]
 
-        # Mark booking as Cancelled
+        # 2. Đổi trạng thái Booking và Thanh toán
         cursor.execute(
-            "UPDATE bookings SET booking_status = 'Cancelled' WHERE booking_id = ?",
+            "UPDATE bookings SET booking_status = 'Cancelled', payment_status = 'Refunded' WHERE booking_id = ?",
             (booking_id,)
         )
+
+        # 3. Hoàn 80% tiền vào Ví Số Dư của Account
+        refund_amount = total_amount * 0.8
+        cursor.execute(
+            "UPDATE accounts SET balance = balance + ? WHERE username = ?",
+            (refund_amount, created_by)
+        )
+
+        # 4. Trừ tiền khỏi Tổng chi tiêu của Hành khách (không cho âm)
+        cursor.execute(
+            "UPDATE passengers SET total_spending = MAX(0, total_spending - ?) WHERE passenger_id = ?",
+            (total_amount, passenger_id)
+        )
+
         conn.commit()
 
-        # Free the seat in the flight's seat map
+        # 5. Giải phóng ghế
         from shared.services.seat_service import release_seat
         release_seat(flight_id, seat_number)
 
