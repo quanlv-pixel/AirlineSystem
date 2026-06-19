@@ -300,10 +300,20 @@ class InformationPage(QWidget):
         if hasattr(self, 'profile_card'):
             self.profile_card.update_info(acc_dict)
 
-        # 2. Update Các ô thống kê Phải
+        # THAY THẾ BẰNG ĐOẠN NÀY:
         history = get_booking_history_by_user(username)
-        acc_spent = sum(r.get("total_amount", 0) for r in history if r.get("booking_status") != "Cancelled")
-        acc_flights = len(history)
+        
+        # Gom nhóm theo mã PNR gốc (loại bỏ phần -1, -2 của ghế)
+        unique_bookings = {}
+        for r in history:
+            status = str(r.get("booking_status", "")).lower()
+            if status not in ["cancelled", "canceled"]:
+                pnr_base = str(r.get("booking_reference", "")).split("-")[0]
+                if pnr_base not in unique_bookings:
+                    unique_bookings[pnr_base] = r.get("total_amount", 0)
+                    
+        acc_spent = sum(unique_bookings.values())
+        acc_flights = len(unique_bookings)
 
         if hasattr(self, 'stats_layout'):
             # Xóa các ô cũ
@@ -336,18 +346,16 @@ class InformationPage(QWidget):
         username = self.account.get("username", "")
         try:
             history = get_booking_history_by_user(username)
-            paid_statuses = {"paid", "confirmed"}
-            total_spent   = sum(
-                row.get("total_amount", 0) or 0
-                for row in history
-                if str(row.get("status", "")).lower() in paid_statuses
-            )
-            total_flights = len({
-                row.get("booking_reference", "").split("-")[0]
-                for row in history
-                if str(row.get("status", "")).lower() in paid_statuses
-                and row.get("booking_reference")
-            })
+            unique_bookings = {}
+            for r in history:
+                status = str(r.get("booking_status", "")).lower()
+                if status not in ["cancelled", "canceled"]:
+                    pnr_base = str(r.get("booking_reference", "")).split("-")[0]
+                    if pnr_base not in unique_bookings:
+                        unique_bookings[pnr_base] = r.get("total_amount", 0)
+                        
+            total_spent = sum(unique_bookings.values())
+            total_flights = len(unique_bookings)
         except Exception:
             total_spent   = self.account.get("total_spent", 0)
             total_flights = self.account.get("total_flights", 0)

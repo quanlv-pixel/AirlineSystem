@@ -104,44 +104,37 @@ class OrderSummary(QWidget):
         self._root.setSpacing(0)
 
     # ── Build / rebuild UI ────────────────────────────────────────────────────
+    # ── Hàm cập nhật dữ liệu ──────────────────────────────────────────────────
     def update_data(self, ctx: dict):
-        pnr = ctx.get("pnr", "TBA")
-        flight = ctx.get("flight", {})
-        pax = ctx.get("passenger", {})
-        seats = ctx.get("seat_labels", [])
+        self._ctx = ctx
+        self._applied_code = ctx.get("promo_used")
         
-        # SỬA LỖI HIỂN THỊ HÀNH KHÁCH
-        name = pax.get("name", "TBA").upper()
-        if len(seats) > 1:
-            name += f" (+{len(seats) - 1} người)"
+        # Lấy số lượng ghế để nhân tiền
+        seats = self._ctx.get("seat_labels", [])
+        num_seats = len(seats) if seats else 1
         
-        self.lbl_pnr.setText(pnr)
-        self.lbl_flt.setText(flight.get("code", "N/A"))
-        self.lbl_pax.setText(name)
-        self.lbl_seat.setText(", ".join(seats) if seats else "N/A")
-
-        base = ctx.get("base_price", 0) * len(seats)
-        tax = ctx.get("tax", 0) * len(seats)
-        fee = ctx.get("fee", 0) * len(seats)
-        seat_f = ctx.get("seat_fee", 0)
-
-        # Tính toán mã giảm giá
-        promo_code = ctx.get("promo_used")
+        base = self._ctx.get("base_price", 0) * num_seats
+        tax = self._ctx.get("tax", 45) * num_seats
+        fee = self._ctx.get("fee", 12) * num_seats
+        seat_f = self._ctx.get("seat_fee", 0)
+        
         subtotal = base + tax + fee + seat_f
-        total = subtotal
-        if promo_code:
-            _, total = apply_promo(promo_code, subtotal)
         
-        ctx["total"] = total  # Lưu lại tổng tiền thật
-
-        self.lbl_base.setText(f"${base}")
-        self.lbl_tax.setText(f"${tax}")
-        self.lbl_fee.setText(f"${fee}")
-        self.lbl_seat_fee.setText(f"${seat_f}")
-        self.lbl_total.setText(f"${total:,.2f}")
-
-        self._discounted_total = None
-        self._applied_code = None
+        # Nếu có mã giảm giá thì tính lại
+        if self._applied_code:
+            from shared.services.member_service import apply_promo
+            valid, msg, new_total = apply_promo(self._applied_code, base, seat_f, tax, fee)
+            if valid:
+                self._discounted_total = new_total
+                self._ctx["total"] = new_total
+            else:
+                self._discounted_total = None
+                self._ctx["total"] = subtotal
+        else:
+            self._discounted_total = None
+            self._ctx["total"] = subtotal
+            
+        # Tự động vẽ lại toàn bộ các nhãn (labels) trên màn hình (không dùng setText)
         self._rebuild()
 
     def _rebuild(self):
@@ -175,10 +168,11 @@ class OrderSummary(QWidget):
         self._root.addWidget(h_sep())
         self._root.addSpacing(14)
 
-        base     = ctx.get("base_price", 0)
-        seat_fee = ctx.get("seat_fee", 0)
-        tax      = ctx.get("tax", 45)
-        fee      = ctx.get("fee", 12)
+        num_seats = len(seats) if seats else 1
+        base     = ctx.get("base_price", 0) * num_seats
+        tax      = ctx.get("tax", 45) * num_seats
+        fee      = ctx.get("fee", 12) * num_seats
+        seat_fee = ctx.get("seat_fee", 0) 
         raw_total = base + seat_fee + tax + fee
 
         for k, v in [("Giá vé", f"${base}"), ("Ghế", f"${seat_fee}"), ("Thuế & Phí", f"${tax + fee}")]:
