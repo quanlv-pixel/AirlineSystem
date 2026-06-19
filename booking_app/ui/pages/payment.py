@@ -103,24 +103,26 @@ class OrderSummary(QWidget):
         self._root.setContentsMargins(22, 22, 22, 22)
         self._root.setSpacing(0)
 
-    # ── Build / rebuild UI ────────────────────────────────────────────────────
     # ── Hàm cập nhật dữ liệu ──────────────────────────────────────────────────
     def update_data(self, ctx: dict):
         self._ctx = ctx
         self._applied_code = ctx.get("promo_used")
         
-        # Lấy số lượng ghế để nhân tiền
+        # KIỂM TRA KHỨ HỒI
+        is_rt = self._ctx.get("is_roundtrip", False)
+        multiplier = 2 if is_rt else 1
+        
         seats = self._ctx.get("seat_labels", [])
         num_seats = len(seats) if seats else 1
         
-        base = self._ctx.get("base_price", 0) * num_seats
-        tax = self._ctx.get("tax", 45) * num_seats
-        fee = self._ctx.get("fee", 12) * num_seats
-        seat_f = self._ctx.get("seat_fee", 0)
+        # NHÂN ĐÔI NẾU LÀ KHỨ HỒI
+        base = self._ctx.get("base_price", 0) * num_seats * multiplier
+        tax = self._ctx.get("tax", 45) * num_seats * multiplier
+        fee = self._ctx.get("fee", 12) * num_seats * multiplier
+        seat_f = self._ctx.get("seat_fee", 0) * multiplier
         
         subtotal = base + tax + fee + seat_f
         
-        # Nếu có mã giảm giá thì tính lại
         if self._applied_code:
             from shared.services.member_service import apply_promo
             valid, msg, new_total = apply_promo(self._applied_code, base, seat_f, tax, fee)
@@ -134,11 +136,9 @@ class OrderSummary(QWidget):
             self._discounted_total = None
             self._ctx["total"] = subtotal
             
-        # Tự động vẽ lại toàn bộ các nhãn (labels) trên màn hình (không dùng setText)
         self._rebuild()
 
     def _rebuild(self):
-        # Clear existing widgets
         while self._root.count():
             item = self._root.takeAt(0)
             if item.widget(): item.widget().deleteLater()
@@ -152,6 +152,13 @@ class OrderSummary(QWidget):
         fl    = ctx.get("flight", {})
         pax   = ctx.get("passenger", {})
         seats = ctx.get("seat_labels", [])
+        
+        is_rt = ctx.get("is_roundtrip", False)
+        trip_type = "Khứ hồi" if is_rt else "Một chiều"
+
+        name = pax.get("name", "TBA").upper()
+        if len(seats) > 1:
+            name += f" (+{len(seats) - 1} người)"
 
         def _row(k, v, c=C_TEXT, b=False):
             r = QHBoxLayout()
@@ -161,18 +168,20 @@ class OrderSummary(QWidget):
             return r
 
         self._root.addLayout(_row("PNR", pnr, C_RED, True));        self._root.addSpacing(8)
+        self._root.addLayout(_row("LOẠI VÉ", trip_type, C_BLUE, True)); self._root.addSpacing(8) # Thêm dòng hiển thị loại vé
         self._root.addLayout(_row("CHUYẾN BAY", fl.get("code", "—"))); self._root.addSpacing(8)
-        self._root.addLayout(_row("HÀNH KHÁCH", pax.get("name", "—"))); self._root.addSpacing(8)
+        self._root.addLayout(_row("HÀNH KHÁCH", name)); self._root.addSpacing(8)
         self._root.addLayout(_row("SỐ GHẾ", ", ".join(seats) if seats else "—"))
         self._root.addSpacing(16)
         self._root.addWidget(h_sep())
         self._root.addSpacing(14)
 
+        multiplier = 2 if is_rt else 1
         num_seats = len(seats) if seats else 1
-        base     = ctx.get("base_price", 0) * num_seats
-        tax      = ctx.get("tax", 45) * num_seats
-        fee      = ctx.get("fee", 12) * num_seats
-        seat_fee = ctx.get("seat_fee", 0) 
+        base     = ctx.get("base_price", 0) * num_seats * multiplier
+        tax      = ctx.get("tax", 45) * num_seats * multiplier
+        fee      = ctx.get("fee", 12) * num_seats * multiplier
+        seat_fee = ctx.get("seat_fee", 0) * multiplier
         raw_total = base + seat_fee + tax + fee
 
         for k, v in [("Giá vé", f"${base}"), ("Ghế", f"${seat_fee}"), ("Thuế & Phí", f"${tax + fee}")]:

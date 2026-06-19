@@ -19,6 +19,10 @@ class PromoCard(QWidget):
     def __init__(self, title: str, code: str, desc: str, exp: str,
                  exclusive: bool = False, parent=None):
         super().__init__(parent)
+        
+        # 1. FIX LỖI: Lưu lại mã code để dùng ở hàm copy_to_clipboard
+        self.code = code 
+        
         border_color = C_ORANGE if exclusive else C_BORDER
         bg_color     = "#FFFBF0" if exclusive else C_WHITE
         self.setStyleSheet(f"""
@@ -53,15 +57,35 @@ class PromoCard(QWidget):
         btn_lay = QHBoxLayout()
         btn_lay.addWidget(lbl(f"Mã: {code}", 13, 800, C_DARK))
         btn_lay.addStretch()
-        copy_btn = QPushButton("Sao chép")
-        copy_btn.setCursor(Qt.PointingHandCursor)
-        copy_btn.setStyleSheet(f"""
+        
+        # 2. FIX LỖI: Phải khởi tạo QPushButton trước khi kết nối sự kiện (connect)
+        self.copy_btn = QPushButton("Sao chép") 
+        self.copy_btn.clicked.connect(self.copy_to_clipboard)
+        self.copy_btn.setCursor(Qt.PointingHandCursor)
+        self.copy_btn.setStyleSheet(f"""
             QPushButton {{ background:{C_LGRAY}; border:none; border-radius:6px;
                            padding:5px 12px; font-size:11px; font-weight:700; color:{C_MID}; }}
             QPushButton:hover {{ background:{C_BORDER}; color:{C_DARK}; }}
         """)
-        btn_lay.addWidget(copy_btn)
+        btn_lay.addWidget(self.copy_btn)
         lay.addLayout(btn_lay)
+
+    def copy_to_clipboard(self):
+        # Lưu mã vào bộ nhớ đệm (Clipboard)
+        QApplication.clipboard().setText(self.code)
+        
+        # Đổi chữ và màu để báo hiệu thành công
+        self.copy_btn.setText("ĐÃ CHÉP")
+        self.copy_btn.setStyleSheet("""
+            QPushButton { 
+                background: #22C55E; /* Đổi sang màu xanh lá */
+                color: white; 
+                border: none;
+                border-radius: 6px; 
+                font-size: 11px; 
+                font-weight: bold; 
+            }
+        """)
 
 
 def get_footer() -> QWidget:

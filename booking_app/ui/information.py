@@ -153,13 +153,14 @@ class StatCard(QWidget):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 4. ACCOUNT INFO CARD — Card tối: thông tin tài khoản dạng rows
+# 4. ACCOUNT INFO CARD — Giao diện mới (Nền sáng, chữ màu, rút gọn thông tin)
 # ─────────────────────────────────────────────────────────────────────────────
 class AccountInfoCard(QWidget):
     def __init__(self, account: dict, parent=None):
         super().__init__(parent)
+        # Đổi nền thành trắng, viền xám để sáng sủa và dễ nhìn hơn
         self.setStyleSheet(
-            f"background:{C_DARK}; border-radius:20px;"
+            f"background:{C_WHITE}; border: 1px solid {C_BORDER}; border-radius:20px;"
         )
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
@@ -167,93 +168,85 @@ class AccountInfoCard(QWidget):
         lay.setContentsMargins(28, 26, 28, 26)
         lay.setSpacing(0)
 
-        title = lbl("Thông tin Tài khoản", 17, 700, C_WHITE)
+        # Tiêu đề màu Đỏ nổi bật
+        title = lbl("Thông tin Tài khoản", 17, 800, C_RED)
         lay.addWidget(title)
         lay.addSpacing(24)
 
-        # Tính các giá trị hiển thị
         passport = account.get("passport_number") or "---"
         phone    = account.get("phone") or "---"
-        provider = account.get("provider", "MOCK AUTH").upper()
 
-        uid_raw = account.get("account_id") or account.get("user_id") or ""
-        if uid_raw:
-            uid_str = str(uid_raw)
-            uid = f"user-{uid_str[:5]}..." if len(uid_str) > 5 else f"user-{uid_str}"
-        else:
-            uid = "user----"
-
-        joined = account.get("created_at", "")
-        if joined:
-            try:
-                dt = datetime.strptime(str(joined)[:10], "%Y-%m-%d")
-                joined = dt.strftime("%d/%m/%Y")
-            except Exception:
-                joined = str(joined)[:10]
-        else:
-            joined = "---"
+        # Label chứa giá trị (Màu đen/xanh đậm)
+        self.passport_lbl = lbl(str(passport), 13, 700, C_TEXT)
+        self.phone_lbl = lbl(str(phone), 13, 700, C_TEXT)
+        self.passport_lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self.phone_lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
 
         rows = [
-            ("HỘ CHIẾU",      passport),
-            ("ĐIỆN THOẠI",    phone),
-            ("PROVIDER",      provider),
-            ("USER ID",       uid),
-            ("NGÀY GIA NHẬP", joined),
+            ("HỘ CHIẾU", self.passport_lbl),
+            ("ĐIỆN THOẠI", self.phone_lbl),
         ]
 
-        for i, (key, val) in enumerate(rows):
+        for i, (key, val_widget) in enumerate(rows):
             row_lay = QHBoxLayout()
             row_lay.setContentsMargins(0, 0, 0, 0)
             row_lay.setSpacing(8)
 
-            key_lbl = lbl(key, 12, 600, "#8888AA", spacing=0.5)
-            val_lbl = lbl(str(val), 13, 600, C_WHITE)
-            val_lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            # Chữ tiêu đề mục (Màu xám đậm)
+            key_lbl = lbl(key, 12, 600, C_MID, spacing=0.5)
 
             row_lay.addWidget(key_lbl)
             row_lay.addStretch()
-            row_lay.addWidget(val_lbl)
+            row_lay.addWidget(val_widget)
             lay.addLayout(row_lay)
 
             if i < len(rows) - 1:
-                lay.addSpacing(12)
+                lay.addSpacing(14)
                 sep = QFrame()
                 sep.setFrameShape(QFrame.HLine)
-                sep.setStyleSheet("background:rgba(255,255,255,0.07); border:none;")
+                sep.setStyleSheet(f"background:{C_BORDER}; border:none;")
                 sep.setFixedHeight(1)
                 lay.addWidget(sep)
-                lay.addSpacing(12)
+                lay.addSpacing(14)
 
+    def update_info(self, account: dict):
+        """Cập nhật lại text khi lưu chỉnh sửa"""
+        self.passport_lbl.setText(str(account.get("passport_number") or "---"))
+        self.phone_lbl.setText(str(account.get("phone") or "---"))
 
 # ─────────────────────────────────────────────────────────────────────────────
-# DIALOG CHỈNH SỬA THÔNG TIN
+# DIALOG CHỈNH SỬA THÔNG TIN - Thêm ô Hộ chiếu
 # ─────────────────────────────────────────────────────────────────────────────
 class EditProfileDialog(QDialog):
     def __init__(self, account, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Chỉnh sửa thông tin")
-        self.setFixedSize(350, 200)
+        self.setFixedSize(350, 260)  # Tăng chiều cao để chứa thêm ô Hộ chiếu
         self.setStyleSheet(f"background: {C_WHITE}; color: {C_TEXT};")
         
         layout = QFormLayout(self)
         layout.setContentsMargins(20, 20, 20, 20)
         input_style = f"border: 1px solid {C_BORDER}; border-radius: 6px; padding: 8px; font-size: 13px;"
         
-        # Lấy dữ liệu cũ (Xử lý cả 2 trường hợp biến là Dictionary hoặc Object)
         if isinstance(account, dict):
             old_name = account.get("full_name", "")
             old_phone = account.get("phone", "")
+            old_passport = account.get("passport_number", "")
         else:
             old_name = getattr(account, "full_name", "")
             old_phone = getattr(account, "phone", "")
+            old_passport = getattr(account, "passport_number", "")
 
         self.name_input = QLineEdit(old_name)
         self.name_input.setStyleSheet(input_style)
         self.phone_input = QLineEdit(old_phone)
         self.phone_input.setStyleSheet(input_style)
+        self.passport_input = QLineEdit(old_passport)
+        self.passport_input.setStyleSheet(input_style)
         
         layout.addRow(lbl("Họ và tên:", 13, 600), self.name_input)
         layout.addRow(lbl("Số điện thoại:", 13, 600), self.phone_input)
+        layout.addRow(lbl("Hộ chiếu:", 13, 600), self.passport_input)
         
         save_btn = QPushButton("Lưu thay đổi")
         save_btn.setCursor(Qt.PointingHandCursor)
@@ -299,6 +292,8 @@ class InformationPage(QWidget):
         acc_dict = self.account if isinstance(self.account, dict) else self.account.__dict__
         if hasattr(self, 'profile_card'):
             self.profile_card.update_info(acc_dict)
+        if hasattr(self, 'info_card'):
+            self.info_card.update_info(acc_dict)
 
         # THAY THẾ BẰNG ĐOẠN NÀY:
         history = get_booking_history_by_user(username)
@@ -409,8 +404,8 @@ class InformationPage(QWidget):
         self.stats_layout.addWidget(StatCard("Chuyến Bay", flights_str, C_BLUE))
         right_col.addLayout(self.stats_layout)
 
-        info_card = AccountInfoCard(self.account)
-        right_col.addWidget(info_card)
+        self.info_card = AccountInfoCard(self.account)
+        right_col.addWidget(self.info_card)
 
         if not is_activated:
             activate_btn = QPushButton("KÍCH HOẠT QUYỀN LỢI HỘI VIÊN")
@@ -440,20 +435,37 @@ class InformationPage(QWidget):
         if dialog.exec() == QDialog.Accepted:
             new_name = dialog.name_input.text()
             new_phone = dialog.phone_input.text()
+            new_passport = dialog.passport_input.text() # Lấy dữ liệu hộ chiếu
             
             if isinstance(self.account, dict):
                 acc_id = self.account.get("account_id") or self.account.get("user_id")
                 self.account["full_name"] = new_name
                 self.account["phone"] = new_phone
+                self.account["passport_number"] = new_passport
             else:
                 acc_id = getattr(self.account, "account_id", None) or getattr(self.account, "user_id", None)
                 self.account.full_name = new_name
                 self.account.phone = new_phone
+                self.account.passport_number = new_passport
                 
             if acc_id:
                 try:
-                    from shared.services.account_service import update_account
+                    from shared.services.account_service import update_account, connect_db
                     update_account(account_id=acc_id, full_name=new_name, phone=new_phone)
+                    
+                    # Tự động cập nhật Hộ chiếu vào Database
+                    conn = connect_db()
+                    c = conn.cursor()
+                    try:
+                        # Tự động thêm cột passport_number nếu bảng accounts chưa có
+                        c.execute("ALTER TABLE accounts ADD COLUMN passport_number TEXT")
+                        conn.commit()
+                    except Exception:
+                        pass # Bỏ qua nếu cột đã tồn tại
+                        
+                    c.execute("UPDATE accounts SET passport_number = ? WHERE account_id = ?", (new_passport, acc_id))
+                    conn.commit()
+                    conn.close()
                 except Exception as e:
                     print(f"Lỗi cập nhật DB: {e}")
 

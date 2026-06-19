@@ -507,6 +507,22 @@ class PassengerPage(QWidget):
         extra_mock = [p for p in MOCK_VIP_PASSENGERS if p.email not in db_emails]
         all_passengers = list(db_passengers) + extra_mock
 
+        # ─── FIX: TỰ ĐỘNG TÍNH THÁNG TỪ TRƯỜNG CREATED_AT ───
+        for p in all_passengers:
+            if not hasattr(p, 'month'):
+                try:
+                    # Lấy chuỗi thời gian, ví dụ: "2026-06-19 10:30:00"
+                    created = getattr(p, 'created_at', None)
+                    if created:
+                        # Tách theo dấu '-' và lấy phần tử thứ 2 (chính là tháng)
+                        month_str = str(created).split('-')[1]
+                        p.month = int(month_str)
+                    else:
+                        p.month = 0
+                except Exception:
+                    p.month = 0
+        # ─────────────────────────────────────────────────────
+
         # Filter by selected month (index 0 = "Tất cả")
         month_idx = self.month_combo.currentIndex()  # 0=all, 1-12 = month number
         if month_idx > 0:

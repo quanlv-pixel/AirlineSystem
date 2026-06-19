@@ -33,16 +33,86 @@ class FlightSummaryCard(QWidget):
         self.setStyleSheet(card_style(16))
         self._root = QVBoxLayout(self); self._root.setContentsMargins(24, 20, 24, 20); self._root.setSpacing(0)
 
-    def update_data(self, flight: dict):
+    def update_data(self, ctx: dict):
         while self._root.count():
             child = self._root.takeAt(0)
-            if child.widget(): child.widget().deleteLater()
-            elif child.layout(): self._clear_layout(child.layout())
-        hdr = QHBoxLayout(); hdr.setSpacing(10); hdr.addWidget(lbl("✈", 15, 700, C_RED)); hdr.addWidget(lbl("CHI TIẾT CHUYẾN BAY", 11, 700, C_TEXT, 1.0)); hdr.addStretch(); self._root.addLayout(hdr); self._root.addSpacing(18)
-        times = QHBoxLayout(); times.setSpacing(0)
-        dep_c = QVBoxLayout(); dep_c.setSpacing(4); dep_c.addWidget(lbl(flight.get("dep_t", "—"), 36, 800, C_TEXT)); dep_c.addWidget(lbl(flight.get("dep", "—"), 14, 600, C_MID)); times.addLayout(dep_c); times.addStretch()
-        mid_c = QVBoxLayout(); mid_c.setSpacing(6); mid_c.setAlignment(Qt.AlignCenter); mid_c.addWidget(lbl(flight.get("dur", "—"), 11, 500, C_GRAY)); mid_c.addWidget(ConfirmTimeline()); times.addLayout(mid_c); times.addStretch()
-        arr_c = QVBoxLayout(); arr_c.setSpacing(4); arr_c.setAlignment(Qt.AlignRight); arr_c.addWidget(lbl(flight.get("arr_t", "—"), 36, 800, C_TEXT)); arr_c.addWidget(lbl(flight.get("dst", "—"), 14, 600, C_MID)); times.addLayout(arr_c); self._root.addLayout(times)
+            if child.widget():
+                child.widget().deleteLater()
+            elif child.layout():
+                self._clear_layout(child.layout())
+
+        self._root.addWidget(
+            lbl("Chi tiết Thanh toán", 18, 800, C_TEXT)
+        )
+        self._root.addSpacing(20)
+
+        # KIỂM TRA XEM CÓ PHẢI VÉ KHỨ HỒI KHÔNG
+        is_rt = ctx.get("is_roundtrip", False)
+        multiplier = 2 if is_rt else 1
+
+        ticket_count = ctx.get("ticket_count", 1)
+        base_unit = ctx.get("base_price", 0)
+        seat_fee  = ctx.get("seat_fee", 0) * multiplier # Nhân đôi phí ghế nếu khứ hồi
+        tax_unit  = ctx.get("tax", 45)
+        fee_unit  = ctx.get("fee", 12)
+
+        # Nhân tiền với số lượng vé VÀ nhân với hệ số khứ hồi (x2)
+        base = base_unit * ticket_count * multiplier
+        tax  = tax_unit  * ticket_count * multiplier
+        fee  = fee_unit  * ticket_count * multiplier
+
+        grand_total = base + seat_fee + tax + fee
+        ctx["total"] = grand_total
+
+        # Build label suffixes
+        suffix = f" (x{ticket_count})" if ticket_count > 1 else ""
+        if is_rt:
+            suffix += " [Khứ Hồi]" # Thêm nhãn để khách hàng dễ hiểu
+
+        for title, amount in [
+            (f"Giá vé máy bay{suffix}", f"${base}"),
+            ("Phí chọn ghế (Cả đi & về)" if is_rt else "Phí chọn ghế", f"${seat_fee}"),
+            (f"Thuế & Phí sân bay{suffix}", f"${tax}"),
+            (f"Phí quản trị hệ thống{suffix}", f"${fee}"),
+        ]:
+            row = QHBoxLayout()
+            row.addWidget(lbl(title, 13, 400, C_MID))
+            row.addStretch()
+            row.addWidget(lbl(amount, 13, 600, C_TEXT))
+            self._root.addLayout(row)
+            self._root.addSpacing(12)
+
+        self._root.addWidget(h_sep())
+        self._root.addSpacing(16)
+
+        tot_row = QHBoxLayout()
+        tot_row.addWidget(
+            lbl("TỔNG THANH TOÁN", 11, 700, C_GRAY, 1.0)
+        )
+        tot_row.addStretch()
+        tot_row.addWidget(
+            lbl(f"${ctx['total']}", 32, 900, C_RED)
+        )
+        self._root.addLayout(tot_row)
+        self._root.addSpacing(20)
+
+        btn = red_btn("THANH TOÁN NGAY 🪪", 52)
+        btn.clicked.connect(self.proceed)
+        self._root.addWidget(btn)
+        self._root.addSpacing(16)
+
+        sec = QWidget()
+        sec.setStyleSheet(
+            "background:#ECFDF5; border:1px solid #A7F3D0; border-radius:12px;"
+        )
+        sl = QHBoxLayout(sec)
+        sl.setContentsMargins(14,12,14,12)
+        sl.setSpacing(10)
+        sl.addWidget(lbl("🛡", 16, 400, C_GREEN))
+        sl.addWidget(lbl("Giao dịch của bạn được bảo mật bởi chuẩn mã hóa SSL/TLS 1.2", 11, 500, C_MID))
+
+        self._root.addWidget(sec)
+        self._root.addStretch()
 
     def _clear_layout(self, layout):
         while layout.count():
