@@ -165,7 +165,11 @@ class FlightsPage(QWidget):
                 if status.lower() != "scheduled": continue
                 total_seats = f.total_seats or 1
                 available_seats = f.available_seats or 0
-                if int((1 - available_seats / total_seats) * 100) >= 90: continue
+                
+                # Tính tỉ lệ lấp đầy (Phần trăm)
+                occ_pct = (1 - available_seats / total_seats) * 100
+                
+                if int(occ_pct) >= 90: continue
                 
                 flight_data = {
                     "fid": f.flight_id, "code": f.flight_number or "N/A",
@@ -173,8 +177,10 @@ class FlightsPage(QWidget):
                     "dep": (f.departure or "")[:3].upper(), "dst": (f.destination or "")[:3].upper(),
                     "dep_t": str(f.departure_time)[11:16] if f.departure_time else "--:--",
                     "arr_t": str(f.arrival_time)[11:16] if f.arrival_time else "--:--",
-                    "price": int(f.ticket_price or 0)
+                    "price": int(f.ticket_price or 0),
+                    "occupancy_percent": occ_pct                 
                 }
+                
                 card = FlightCard(flight_data)
                 card.selected.connect(self._on_flight_chosen)
                 self._all_cards.append((card, flight_data))

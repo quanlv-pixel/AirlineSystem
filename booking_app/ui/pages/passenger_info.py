@@ -60,7 +60,9 @@ class BookingSummaryCard(QWidget):
         ft_row = QHBoxLayout(); ft_row.setSpacing(14)
         globe_badge = QLabel("🌐"); globe_badge.setFixedSize(44, 44); globe_badge.setAlignment(Qt.AlignCenter)
         globe_badge.setStyleSheet(f"background:{C_LGRAY}; border-radius:22px; font-size:20px;")
-        ft_info = QVBoxLayout(); ft_info.setSpacing(3); ft_info.addWidget(lbl("LOẠI CHUYẾN BAY", 10, 600, C_GRAY, 1.0)); ft_info.addWidget(lbl("QUỐC NỘI (DOMESTIC)", 13, 700, C_TEXT))
+        ft_info = QVBoxLayout(); ft_info.setSpacing(3); ft_info.addWidget(lbl("LOẠI CHUYẾN BAY", 10, 600, C_GRAY, 1.0))
+        self.flight_type_lbl = lbl("QUỐC NỘI (DOMESTIC)", 13, 700, C_TEXT)
+        ft_info.addWidget(self.flight_type_lbl)
         ft_row.addWidget(globe_badge); ft_row.addLayout(ft_info); ft_row.addStretch(); root.addLayout(ft_row)
         root.addSpacing(18); root.addWidget(h_sep()); root.addSpacing(16)
         def _status_row(key, val, val_color=C_TEXT):
@@ -148,6 +150,22 @@ class PassengerInfoPage(QWidget):
         if account:
             if not self._name.text(): self._name.setText(account.get("full_name", "").upper())
             if not self._email.text(): self._email.setText(account.get("email", ""))
+
+        # TỰ ĐỘNG NHẬN DIỆN QUỐC TẾ / QUỐC NỘI
+        flight = self.ctx.get("flight", {})
+        dep = flight.get("dep", "").upper()
+        dst = flight.get("dst", "").upper()
+        
+        # Danh sách mã sân bay tại Việt Nam
+        vn_airports = {"SGN", "HAN", "DAD", "PQC", "CXR", "VCA", "HPH", "VDO", "UIH", "VII", "BMV", "VKG", "DLI", "TBB", "THD", "PXU", "VDH", "VCL", "VCS", "CAH"}
+        
+        if dep and dst and (dep not in vn_airports or dst not in vn_airports):
+            # ĐÃ FIX: Thêm self._summary. vào phía trước
+            self._summary.flight_type_lbl.setText("QUỐC TẾ (INTERNATIONAL)")
+            self._summary.flight_type_lbl.setStyleSheet(f"font-size:13px; font-weight:800; color:{C_BLUE};") 
+        else:
+            self._summary.flight_type_lbl.setText("QUỐC NỘI (DOMESTIC)")
+            self._summary.flight_type_lbl.setStyleSheet(f"font-size:13px; font-weight:700; color:{C_TEXT};")
 
     def _on_proceed(self):
         name = self._name.text().strip(); passport = self._passport.text().strip(); phone = self._phone.text().strip()
