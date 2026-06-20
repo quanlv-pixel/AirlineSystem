@@ -21,19 +21,21 @@ from PySide6.QtWidgets import QMessageBox
 # Helper: group raw rows by base PNR
 # ─────────────────────────────────────────────────────────────────────────────
 def _group_by_pnr(raw_rows: list[dict]) -> list[dict]:
-    """
-    Collapse individual seat-rows into grouped order dicts keyed by base PNR.
-    A PNR like 'JJ1A2B-2' strips to base 'JJ1A2B'.
-    """
     groups: dict[str, list[dict]] = defaultdict(list)
     for row in raw_rows:
         ref = str(row.get("booking_reference", "")).strip()
         base_pnr = ref.split("-")[0] if ref else str(row.get("booking_id", "?"))
-        groups[base_pnr].append(row)
+        
+        # --- ĐÃ FIX: Nhóm theo cả PNR VÀ Trạng thái ---
+        # Việc này giúp tách rời vé "Đã hủy" và vé "Đã xác nhận" dù chúng có vô tình trùng PNR
+        status = str(row.get("status", "pending")).lower()
+        group_key = f"{base_pnr}_{status}"
+        groups[group_key].append(row)
 
     result: list[dict] = []
-    for base_pnr, rows in groups.items():
+    for group_key, rows in groups.items():
         first = rows[0]
+        base_pnr = group_key.split("_")[0] # Lấy lại mã PNR gốc từ chuỗi gộp
         ticket_count = len(rows)
         total_group_amount = sum(r.get("total_amount", 0) for r in rows)
         seats = [str(r.get("seats", "")).strip() for r in rows if r.get("seats")]

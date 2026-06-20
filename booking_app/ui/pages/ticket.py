@@ -269,7 +269,10 @@ class TicketPage(QWidget):
         self._info_strip.addStretch()
 
         # 4. Update Actions
-        while self._actions.count(): self._actions.takeAt(0).widget().deleteLater()
+        while self._actions.count():
+            item = self._actions.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
         btn_dl = QPushButton("📥  TẢI VỀ (PNG)"); btn_dl.setFixedHeight(50); btn_dl.setCursor(Qt.PointingHandCursor)
         btn_dl.setStyleSheet(f"QPushButton{{background:{C_DARK}; color:white; border-radius:25px; font-size:13px; font-weight:700; padding:0 24px;}} QPushButton:hover{{background:#2A2A4E;}}")
         btn_dl.clicked.connect(self._save_ticket); self._actions.addWidget(btn_dl)
@@ -277,6 +280,8 @@ class TicketPage(QWidget):
         btn_home = QPushButton("QUAY LẠI TRANG CHỦ"); btn_home.setFixedHeight(50); btn_home.setCursor(Qt.PointingHandCursor)
         btn_home.setStyleSheet(f"QPushButton{{background:transparent; border:1.5px solid {C_BORDER}; border-radius:25px; font-size:13px; font-weight:600; color:{C_GRAY}; padding:0 24px;}} QPushButton:hover{{color:{C_RED};}}")
         btn_home.clicked.connect(self.go_home.emit); self._actions.addWidget(btn_home); self._actions.addStretch()
+
+        send_ticket_email_async(self.ctx)
 
     def _save_ticket(self):
         path, _ = QFileDialog.getSaveFileName(self, "Lưu vé", f"Ticket_{_safe_get(self.ctx, 'pnr', 'JJ')}.png", "PNG (*.png)")

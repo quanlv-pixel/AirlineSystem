@@ -110,9 +110,7 @@ class StatCard(QWidget):
     def set_value(self, new_value: str) -> None:
         self._value_lbl.setText(str(new_value))
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Revenue Chart (ĐÃ ĐƯỢC LÀM CHO "SỐNG" - TỰ ĐỘNG VẼ THEO DATA)
-# ─────────────────────────────────────────────────────────────────────────────
+
 class RevenueChart(QWidget):
     def __init__(self):
         super().__init__()

@@ -330,6 +330,20 @@ class BookingWindow(QMainWindow):
     def _handle_nav_tab(self, index: int):
         if 0 <= index <= 3:
             if index == 0:
+                self.ctx["is_selecting_return"] = False
+                self.ctx["is_roundtrip"] = False
+                import random, string
+                self.ctx["pnr"] = "JJ" + "".join(random.choices(string.ascii_uppercase + string.digits, k=4))
+                self.ctx["flight"] = None
+                self.ctx["flight_return"] = None
+                self.ctx["seats"] = []
+                self.ctx["seat_labels"] = []
+                self.ctx["promo_used"] = None
+                self.ctx["wallet_used"] = 0
+                self.ctx["base_price"] = 0
+                self.ctx["total"] = 0
+                self._booking_saved = False
+                
                 self.step1_search.search_flights()
             elif index == 1:
                 self.page_history.refresh(self.account)
@@ -406,6 +420,25 @@ class BookingWindow(QMainWindow):
 
     def _to_step7_payment(self, updated_ctx: dict):
         self.ctx.update(updated_ctx)
+        
+        # --- TÍNH NĂNG MỚI: TẢI SỐ DƯ VÍ TRƯỚC KHI THANH TOÁN ---
+        balance = 0.0
+        username = self.account.get("username", "")
+        try:
+            from database.db import get_connection
+            conn = get_connection()
+            c = conn.cursor()
+            c.execute("SELECT balance FROM accounts WHERE username=?", (username,))
+            res = c.fetchone()
+            if res and res[0] is not None: 
+                balance = float(res[0])
+            conn.close()
+        except Exception as e:
+            print("Lỗi tải số dư ví:", e)
+            
+        self.ctx["wallet_balance"] = balance
+        # --------------------------------------------------------
+        
         self._call_update_and_switch(self.step7_payment, 8)
 
     def _to_step8_ticket(self, final_ctx: dict):
@@ -522,10 +555,27 @@ class BookingWindow(QMainWindow):
                 if first_booking_id is None: first_booking_id = booking_id
                 reserve_seat(fid, seat_label, passenger_id)
 
+            # --- ĐÃ SỬA: KIỂM TRA PHƯƠNG THỨC THANH TOÁN VÀ TRỪ VÍ ---
+            payment_method = self.ctx.get("payment_method", "Card")
+            
             if first_booking_id:
-                create_payment(first_booking_id, "Card", grand_total, pnr + "-TX")
+                create_payment(first_booking_id, payment_method, grand_total, pnr + "-TX")
 
             update_spending(passenger_id, grand_total)
+
+            # NẾU KHÁCH CHỌN VÍ -> TRỪ TIỀN TRONG BẢNG ACCOUNTS
+            if payment_method == "Wallet":
+                try:
+                    from database.db import get_connection
+                    conn = get_connection()
+                    c = conn.cursor()
+                    username = self.account.get("username", "")
+                    c.execute("UPDATE accounts SET balance = balance - ? WHERE username = ?", (grand_total, username))
+                    conn.commit()
+                    conn.close()
+                except Exception as e:
+                    print(f"Lỗi trừ tiền ví: {e}")
+
             return True
         except Exception as e:
             print(f"[Refactor Error] _save_booking_to_db: {e}"); return False

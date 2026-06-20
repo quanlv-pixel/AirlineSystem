@@ -303,5 +303,4 @@ def search_flights(keyword):
     rows = cursor.fetchall()
     conn.close()
     
-    # SỬA LỖI Ở ĐÂY: Chuyển dữ liệu thô thành Object Flight
     return [_row_to_flight(row) for row in rows]

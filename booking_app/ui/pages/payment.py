@@ -267,10 +267,17 @@ class OrderSummary(QWidget):
             self._promo_msg.setStyleSheet("font-size: 11px; color: #C62828; background: transparent;")
             return
 
-        base     = self._ctx.get("base_price", 0)
-        seat_fee = self._ctx.get("seat_fee", 0)
-        tax      = self._ctx.get("tax", 45)
-        fee      = self._ctx.get("fee", 12)
+        # ── ĐÃ FIX: Lấy đúng số lượng vé và hệ số khứ hồi ──
+        is_rt = self._ctx.get("is_roundtrip", False)
+        multiplier = 2 if is_rt else 1
+        seats = self._ctx.get("seat_labels", [])
+        num_seats = len(seats) if seats else 1
+
+        # ── ĐÃ FIX: Nhân đúng tổng tiền trước khi đưa vào hàm tính giảm giá ──
+        base     = self._ctx.get("base_price", 0) * num_seats * multiplier
+        seat_fee = self._ctx.get("seat_fee", 0) * multiplier
+        tax      = self._ctx.get("tax", 45) * num_seats * multiplier
+        fee      = self._ctx.get("fee", 12) * num_seats * multiplier
 
         valid, msg, new_total = apply_promo(code, base, seat_fee, tax, fee)
         if valid:
@@ -306,7 +313,7 @@ class PaymentPage(QWidget):
     def __init__(self, ctx: dict | None = None, parent=None):
         super().__init__(parent)
         self.ctx = ctx or {}
-        self._is_paying: bool = False  # guard against double-click opening multiple SSLDialogs
+        self._is_paying: bool = False  
         self.setStyleSheet(f"background:{C_BG};")
         root = QVBoxLayout(self)
         root.setContentsMargins(28, 24, 28, 28)
@@ -316,21 +323,23 @@ class PaymentPage(QWidget):
         body = QHBoxLayout(); body.setSpacing(20)
         left = QVBoxLayout(); left.setSpacing(15)
 
-        # Method Tabs
+        # Method Tabs (Thêm tab Ví JetJet)
         tab_lay = QHBoxLayout(); tab_lay.setSpacing(10)
-        self.btn_card = QPushButton("Thẻ Tín Dụng")
-        self.btn_qr   = QPushButton("Mã QR (VNPay/Momo)")
-        for b in [self.btn_card, self.btn_qr]:
+        self.btn_card   = QPushButton("Thẻ Tín Dụng")
+        self.btn_qr     = QPushButton("Mã QR (VNPay/Momo)")
+        self.btn_wallet = QPushButton("Ví JetJet") 
+        
+        for b in [self.btn_card, self.btn_qr, self.btn_wallet]:
             b.setCheckable(True); b.setFixedHeight(45); b.setCursor(Qt.PointingHandCursor)
         self.btn_card.setChecked(True)
-        tab_lay.addWidget(self.btn_card, 1); tab_lay.addWidget(self.btn_qr, 1)
+        tab_lay.addWidget(self.btn_card, 1); tab_lay.addWidget(self.btn_qr, 1); tab_lay.addWidget(self.btn_wallet, 1)
         left.addLayout(tab_lay)
 
         # Payment Forms Stack
         from PySide6.QtWidgets import QStackedWidget
         self.method_stack = QStackedWidget()
 
-        # Card Form
+        # 1. Card Form
         card_w = QWidget(); card_w.setStyleSheet(card_style(20))
         cw_lay = QVBoxLayout(card_w); cw_lay.setSpacing(15)
         self._preview = CreditCardPreview(); cw_lay.addWidget(self._preview, 0, Qt.AlignCenter)
@@ -338,13 +347,20 @@ class PaymentPage(QWidget):
         self._f_name = QLineEdit(); self._f_name.setPlaceholderText("TÊN CHỦ THẺ"); self._f_name.textChanged.connect(self._preview.set_name); cw_lay.addWidget(self._f_name)
         self.method_stack.addWidget(card_w)
 
-        # QR Form
+        # 2. QR Form
         qr_w = QWidget(); qr_w.setStyleSheet(card_style(20))
         qw_lay = QVBoxLayout(qr_w); qw_lay.setAlignment(Qt.AlignCenter)
         qw_lay.addWidget(lbl("QUÉT MÃ ĐỂ THANH TOÁN", 14, 800, C_DARK))
         self.qr_widget = QRCodeWidget("JETJET-ORDER-12345"); qw_lay.addWidget(self.qr_widget)
         qw_lay.addWidget(lbl("Sử dụng ứng dụng ngân hàng hoặc ví điện tử để quét", 11, 400, C_GRAY))
         self.method_stack.addWidget(qr_w)
+
+        # 3. Wallet Form (Ví JetJet)
+        wallet_w = QWidget(); wallet_w.setStyleSheet(card_style(20))
+        ww_lay = QVBoxLayout(wallet_w); ww_lay.setAlignment(Qt.AlignCenter)
+        ww_lay.addWidget(lbl("🎉 ĐỦ SỐ DƯ ĐỂ THANH TOÁN", 18, 800, C_GREEN), 0, Qt.AlignCenter)
+        ww_lay.addWidget(lbl("Hệ thống sẽ trừ tiền trực tiếp vào Ví JetJet của bạn.", 12, 400, C_GRAY), 0, Qt.AlignCenter)
+        self.method_stack.addWidget(wallet_w)
 
         left.addWidget(self.method_stack); left.addStretch()
         body.addLayout(left, 62)
@@ -356,8 +372,8 @@ class PaymentPage(QWidget):
 
         self.btn_card.clicked.connect(lambda: self._switch_method(0))
         self.btn_qr.clicked.connect(lambda: self._switch_method(1))
+        self.btn_wallet.clicked.connect(lambda: self._switch_method(2))
 
-        # Thêm Radar quét trạng thái QR
         self.check_timer = QTimer(self)
         self.check_timer.timeout.connect(self._check_payment_status)
         self._switch_method(0)
@@ -368,13 +384,12 @@ class PaymentPage(QWidget):
         st = "background:{}; color:{}; border:none; border-radius:8px; font-weight:700;"
         self.btn_card.setStyleSheet(st.format(C_RED if idx==0 else C_WHITE, C_WHITE if idx==0 else C_MID))
         self.btn_qr.setStyleSheet(st.format(C_RED if idx==1 else C_WHITE, C_WHITE if idx==1 else C_MID))
+        self.btn_wallet.setStyleSheet(st.format(C_RED if idx==2 else C_WHITE, C_WHITE if idx==2 else C_MID))
         
-        # BẬT/TẮT RADAR QUÉT QR
         if idx == 1:
+            self.ctx["payment_method"] = "QR"
             pnr = self.ctx.get('pnr', 'TEST')
             amount = self.ctx.get('total', 0)
-            
-            # Tự động lấy IP máy tính
             s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             try:
                 s.connect(("8.8.8.8", 80))
@@ -383,51 +398,55 @@ class PaymentPage(QWidget):
                 ip = "127.0.0.1"
             finally:
                 s.close()
-                
-            # Tạo Link thật cho điện thoại quét
             payment_url = f"http://{ip}:5000/pay/{pnr}/{amount}"
             self.qr_widget.update_qr(payment_url)
-            
-            # Bật Radar, quét 2 giây 1 lần
             self.check_timer.start(2000)
+        elif idx == 2:
+            self.check_timer.stop()
+            self.ctx["payment_method"] = "Wallet" # LƯU CHẾ ĐỘ THANH TOÁN LÀ VÍ
         else:
             self.check_timer.stop()
+            self.ctx["payment_method"] = "Card"
 
     def _check_payment_status(self):
         pnr = self.ctx.get('pnr', 'TEST')
         try:
-            # Máy tính hỏi Server xem điện thoại đã bấm nút chưa
             s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             s.connect(("8.8.8.8", 80))
             ip = s.getsockname()[0]
             s.close()
-            
             res = requests.get(f"http://{ip}:5000/api/status/{pnr}", timeout=1)
             data = res.json()
-            
             if data.get("status") == "PAID":
                 self.check_timer.stop()
-                # Tự động phát tín hiệu hoàn thành y hệt như lúc điền thẻ tín dụng!
                 self.payment_complete.emit(self.ctx)
         except Exception as e:
-            pass # Bỏ qua nếu mất mạng hoặc server chưa bật
+            pass 
 
     def update_page(self, ctx: dict | None = None):
         if ctx: self.ctx = ctx
         self._order.update_data(self.ctx)
-        self.qr_widget.data = f"JETJET-{self.ctx.get('pnr', 'PAY')}-{self.ctx.get('total', 0)}"
-        self.qr_widget.update()
+        self.qr_widget.update_qr(f"JETJET-{self.ctx.get('pnr', 'PAY')}-{self.ctx.get('total', 0)}")
+        
+        # LOGIC ẨN/HIỆN THANH TOÁN BẰNG VÍ
+        balance = self.ctx.get("wallet_balance", 0.0)
+        total = self.ctx.get("total", 0)
+        
+        if balance >= total and total > 0:
+            self.btn_wallet.setVisible(True)
+            self.btn_wallet.setText(f"Ví JetJet (${balance:,.0f})")
+            self._switch_method(2)  # Mặc định nhảy sang tab Ví cho khách vui lòng
+        else:
+            self.btn_wallet.setVisible(False)
+            self._switch_method(0)  # Tiền không đủ -> Trả về tab Thẻ tín dụng mặc định
 
     def _on_pay(self):
-        # Prevent multiple SSLDialog instances from opening on rapid/double-click
         if self._is_paying:
             return
         self._is_paying = True
         try:
             total = self.ctx.get("total", 0)
             dlg = SSLDialog(total, self)
-            # Qt.SingleShotConnection ensures the slot fires at most once per dialog,
-            # preventing double create_booking() calls if the dialog is re-shown.
             dlg.payment_complete.connect(
                 lambda: self.payment_complete.emit(self.ctx),
                 Qt.SingleShotConnection

@@ -295,20 +295,23 @@ class InformationPage(QWidget):
         if hasattr(self, 'info_card'):
             self.info_card.update_info(acc_dict)
 
-        # THAY THẾ BẰNG ĐOẠN NÀY:
+        # ── ĐÃ FIX: Lọc chính xác trạng thái và cộng tiền chuẩn ──
         history = get_booking_history_by_user(username)
         
-        # Gom nhóm theo mã PNR gốc (loại bỏ phần -1, -2 của ghế)
-        unique_bookings = {}
+        unique_pnrs = set()
+        acc_spent = 0
         for r in history:
-            status = str(r.get("booking_status", "")).lower()
-            if status not in ["cancelled", "canceled"]:
-                pnr_base = str(r.get("booking_reference", "")).split("-")[0]
-                if pnr_base not in unique_bookings:
-                    unique_bookings[pnr_base] = r.get("total_amount", 0)
-                    
-        acc_spent = sum(unique_bookings.values())
-        acc_flights = len(unique_bookings)
+            # Sửa lỗi lấy nhầm key 'booking_status', hỗ trợ đọc cả 2 phòng hờ
+            status = str(r.get("status", r.get("booking_status", ""))).lower()
+            
+            # Lọc toàn bộ các từ khóa báo hiệu đã hủy
+            if status not in ["cancelled", "canceled", "đã hủy", "đã hủy vé"]:
+                pnr_base = str(r.get("booking_reference", r.get("pnr", ""))).split("-")[0]
+                unique_pnrs.add(pnr_base)
+                # Cộng tất cả tiền của mọi vé (không bị sót khi 1 chuyến đặt nhiều ghế)
+                acc_spent += float(r.get("total_amount", 0))
+                
+        acc_flights = len(unique_pnrs)
 
         if hasattr(self, 'stats_layout'):
             # Xóa các ô cũ
@@ -316,7 +319,7 @@ class InformationPage(QWidget):
                 widget = self.stats_layout.itemAt(i).widget()
                 if widget: widget.deleteLater()
 
-            # Thêm 3 ô mới với class StatCard chuẩn
+            # Thêm 3 ô mới
             self.stats_layout.addWidget(StatCard("TỔNG CHI TIÊU", f"${acc_spent:,.0f}", C_GREEN))
             self.stats_layout.addWidget(StatCard("SỐ DƯ VÍ", f"${acc_balance:,.2f}", C_ORANGE))
             self.stats_layout.addWidget(StatCard("CHUYẾN BAY", f"{acc_flights}", C_BLUE))
@@ -339,22 +342,7 @@ class InformationPage(QWidget):
         lay.setSpacing(20)
 
         username = self.account.get("username", "")
-        try:
-            history = get_booking_history_by_user(username)
-            unique_bookings = {}
-            for r in history:
-                status = str(r.get("booking_status", "")).lower()
-                if status not in ["cancelled", "canceled"]:
-                    pnr_base = str(r.get("booking_reference", "")).split("-")[0]
-                    if pnr_base not in unique_bookings:
-                        unique_bookings[pnr_base] = r.get("total_amount", 0)
-                        
-            total_spent = sum(unique_bookings.values())
-            total_flights = len(unique_bookings)
-        except Exception:
-            total_spent   = self.account.get("total_spent", 0)
-            total_flights = self.account.get("total_flights", 0)
-
+        
         try:
             is_activated = get_is_activated(username)
         except Exception:
@@ -364,7 +352,7 @@ class InformationPage(QWidget):
         body.setSpacing(28)
         body.setAlignment(Qt.AlignTop)
 
-        # Cột trái (Gán biến self.profile_card)
+        # Cột trái
         self.profile_card = ProfileCard(self.account)
         body.addWidget(self.profile_card, 0, Qt.AlignTop)
 
@@ -393,15 +381,9 @@ class InformationPage(QWidget):
         header_row.addWidget(edit_btn)
         right_col.addLayout(header_row)
 
-        # Stats row (Gán biến self.stats_layout)
+        # Tạm thời tạo layout rỗng, hàm update_account phía dưới sẽ tự động tính toán và vẽ lại cho chuẩn
         self.stats_layout = QHBoxLayout()
         self.stats_layout.setSpacing(16)
-
-        spent_str   = f"${total_spent:,.0f}" if total_spent else "$0"
-        flights_str = str(total_flights) if total_flights else "0"
-
-        self.stats_layout.addWidget(StatCard("Tổng Chi Tiêu", spent_str, C_GREEN))
-        self.stats_layout.addWidget(StatCard("Chuyến Bay", flights_str, C_BLUE))
         right_col.addLayout(self.stats_layout)
 
         self.info_card = AccountInfoCard(self.account)
@@ -427,7 +409,7 @@ class InformationPage(QWidget):
         lay.addLayout(body)
         lay.addStretch()
         
-        # Mở lên là fetch data luôn cho 3 ô khớp
+        # Mở trang lên là hệ thống tự động chốt sổ sách (Cập nhật Data luôn)
         self.update_account(self.account)
 
     def _on_edit_clicked(self):
@@ -435,7 +417,7 @@ class InformationPage(QWidget):
         if dialog.exec() == QDialog.Accepted:
             new_name = dialog.name_input.text()
             new_phone = dialog.phone_input.text()
-            new_passport = dialog.passport_input.text() # Lấy dữ liệu hộ chiếu
+            new_passport = dialog.passport_input.text() 
             
             if isinstance(self.account, dict):
                 acc_id = self.account.get("account_id") or self.account.get("user_id")
@@ -457,11 +439,10 @@ class InformationPage(QWidget):
                     conn = connect_db()
                     c = conn.cursor()
                     try:
-                        # Tự động thêm cột passport_number nếu bảng accounts chưa có
                         c.execute("ALTER TABLE accounts ADD COLUMN passport_number TEXT")
                         conn.commit()
                     except Exception:
-                        pass # Bỏ qua nếu cột đã tồn tại
+                        pass 
                         
                     c.execute("UPDATE accounts SET passport_number = ? WHERE account_id = ?", (new_passport, acc_id))
                     conn.commit()
