@@ -129,9 +129,16 @@ def _db_register(name, email, pwd):
     try:
         conn = sqlite3.connect(_get_db_path())
         cur = conn.cursor()
+        
         username = email.split("@")[0].lower()
         cur.execute("INSERT INTO accounts (username, email, password_hash, full_name, role) VALUES (?,?,?,?,'customer')",
                    (username, email.lower(), _hash(pwd), name))
+        
+        cur.execute("""
+            INSERT INTO passengers (full_name, email, gender, date_of_birth, phone, nationality)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (name, email.lower(), "N/A", "1990-01-01", "", "Vietnam"))
+        
         conn.commit()
         conn.close()
         return True, "Thành công"

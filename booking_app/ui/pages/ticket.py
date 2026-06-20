@@ -11,12 +11,14 @@ from __future__ import annotations
 import hashlib, random, sys
 from datetime import datetime
 
+from email.mime.image import MIMEImage
+import io
 import smtplib
 import threading
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
-from PySide6.QtCore import Qt, Signal, QRect, QRectF, QSize, QPoint
+from PySide6.QtCore import Qt, Signal, QRect, QRectF, QSize, QPoint, QBuffer, QIODevice
 from PySide6.QtGui import (
     QColor, QPainter, QBrush, QPen, QPainterPath,
     QLinearGradient, QFont, QFontMetrics, QPixmap
@@ -41,11 +43,13 @@ SMTP_EMAIL = os.getenv("SMTP_EMAIL")
 SMTP_APP_PASSWORD = os.getenv("SMTP_APP_PASSWORD")
 
 
-def send_ticket_email_async(ctx: dict):
+def send_ticket_email_async(ctx: dict, ticket_pixmap: QPixmap):
     def _send():
         try:
             to_email = ctx.get("passenger", {}).get("email")
-            if not to_email: return
+            if not to_email: 
+                print("Không tìm thấy email hành khách.")
+                return
 
             pnr = ctx.get("pnr", "TBA")
             name = ctx.get("passenger", {}).get("name", "Quý khách").upper()
@@ -80,6 +84,18 @@ Trân trọng,
             """
             msg.attach(MIMEText(body, 'plain', 'utf-8'))
 
+            # --- SỬA LỖI: Dùng QBuffer để lưu ảnh vào bộ nhớ ---
+            buffer = QBuffer()
+            buffer.open(QIODevice.WriteOnly)
+            ticket_pixmap.save(buffer, "PNG")
+            img_data = buffer.data().data() # Chuyển dữ liệu sang bytes
+            buffer.close()
+            
+            # Đính kèm ảnh vào email
+            image = MIMEImage(img_data, name=f"JetJet_Ticket_{pnr}.png")
+            msg.attach(image)
+            # --------------------------------------------------
+
             server = smtplib.SMTP('smtp.gmail.com', 587)
             server.starttls()
             server.login(SMTP_EMAIL, SMTP_APP_PASSWORD)
@@ -89,7 +105,7 @@ Trân trọng,
         except Exception as e:
             print(f"Lỗi gửi email vé: {e}")
 
-    # Chạy ngầm để không làm giật màn hình của khách
+    # Chạy ngầm
     threading.Thread(target=_send, daemon=True).start()
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -281,7 +297,13 @@ class TicketPage(QWidget):
         btn_home.setStyleSheet(f"QPushButton{{background:transparent; border:1.5px solid {C_BORDER}; border-radius:25px; font-size:13px; font-weight:600; color:{C_GRAY}; padding:0 24px;}} QPushButton:hover{{color:{C_RED};}}")
         btn_home.clicked.connect(self.go_home.emit); self._actions.addWidget(btn_home); self._actions.addStretch()
 
-        send_ticket_email_async(self.ctx)
+        current_pnr = self.ctx.get("pnr")
+        if current_pnr and getattr(self, '_sent_pnr', None) != current_pnr:
+            QApplication.processEvents() 
+            ticket_img = self._ticket.grab()
+            if not ticket_img.isNull():
+                send_ticket_email_async(self.ctx, ticket_img)
+                self._sent_pnr = current_pnr
 
     def _save_ticket(self):
         path, _ = QFileDialog.getSaveFileName(self, "Lưu vé", f"Ticket_{_safe_get(self.ctx, 'pnr', 'JJ')}.png", "PNG (*.png)")

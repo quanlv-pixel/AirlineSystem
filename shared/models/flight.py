@@ -21,25 +21,17 @@ class Flight:
         self.flight_id = flight_id
         self.flight_number = flight_number
         self.airline_name = airline_name
-
         self.departure = departure
         self.destination = destination
-
         self.departure_time = departure_time
         self.arrival_time = arrival_time
-
         self.aircraft = aircraft
-
         self.terminal = terminal
         self.gate = gate
-
         self.total_seats = total_seats
         self.available_seats = available_seats
-
         self.ticket_price = ticket_price
-
         self.status = status
-
         self.created_at = created_at
         self.month = month  # <-- GÁN GIÁ TRỊ NÀY
 

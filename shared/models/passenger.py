@@ -24,10 +24,8 @@ class Passenger:
         self.nationality = nationality
         self.phone = phone
         self.email = email
-
         self.member_rank = member_rank
         self.total_spending = total_spending
-
         self.passport_number = passport_number
         self.emergency_contact = emergency_contact
         self.created_at = created_at

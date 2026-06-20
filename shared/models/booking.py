@@ -16,27 +16,16 @@ class Booking:
         promo_used: str = None,
     ):
         self.booking_id = booking_id
-
         self.booking_reference = booking_reference
-
         self.passenger_id = passenger_id
-
         self.flight_id = flight_id
-
         self.seat_number = seat_number
-
         self.booking_class = booking_class
-
         self.total_amount = total_amount
-
         self.payment_status = payment_status
-
         self.booking_status = booking_status
-
         self.booking_date = booking_date
-
         self.created_by = created_by
-
         self.promo_used = promo_used
 
     def is_paid(self) -> bool:

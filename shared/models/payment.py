@@ -11,17 +11,11 @@ class Payment:
         paid_at: str = None,
     ):
         self.payment_id = payment_id
-
         self.booking_id = booking_id
-
         self.payment_method = payment_method
-
         self.payment_amount = payment_amount
-
         self.payment_status = payment_status
-
         self.transaction_code = transaction_code
-
         self.paid_at = paid_at
 
     def is_paid(self) -> bool:

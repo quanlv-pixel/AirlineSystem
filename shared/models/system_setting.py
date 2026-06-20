@@ -8,11 +8,8 @@ class SystemSetting:
         updated_at: str = None,
     ):
         self.setting_id = setting_id
-
         self.setting_key = setting_key
-
         self.setting_value = setting_value
-
         self.updated_at = updated_at
 
     def __repr__(self) -> str:
